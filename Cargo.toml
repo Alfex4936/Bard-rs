@@ -1,9 +1,9 @@
 [package]
 name = "bard-rs"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 authors = ["Seok Won Choi <ikr@kakao.com>"]
-descrition = "Google Bard CLI"
+description = "Google Bard CLI"
 license = "MIT"
 repository = "https://github.com/Alfex4936/Bard-rs"
 keywords = ["Google", "Bard", "CLI"]

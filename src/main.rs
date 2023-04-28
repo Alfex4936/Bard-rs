@@ -204,7 +204,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let response = chatbot.ask(input).await?;
 
             // Use \r to move the cursor to the beginning of the line and print the response
-            println!("\rBard: {}", response.get("content").unwrap());
+            println!(
+                "\rBard: {}",
+                response.get("content").unwrap().as_str().unwrap()
+            );
         }
     }
 
