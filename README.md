@@ -2,8 +2,7 @@
 
 A simple command line interface for interacting with Google Bard, written in Rust.
 
-![image](https://user-images.githubusercontent.com/2356749/235067629-4cf86781-72bb-468f-9bd3-c495a31818f1.png)
-
+![image](https://user-images.githubusercontent.com/2356749/235073061-acf3d242-7486-454e-8ad8-92bfe9d80dd1.png)
 
 ## Prerequisites
 
