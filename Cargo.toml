@@ -1,0 +1,22 @@
+[package]
+name = "bard-rs"
+version = "1.0.0"
+edition = "2021"
+authors = ["Seok Won Choi <ikr@kakao.com>"]
+descrition = "Google Bard CLI"
+license = "MIT"
+repository = "https://github.com/Alfex4936/Bard-rs"
+keywords = ["Google", "Bard", "CLI"]
+
+[dependencies]
+clap = { version = "4.2.5", features = ["derive"] }
+flate2 = "1.0.25"
+rand = "0.8.5"
+regex = "1.8.1"
+
+reqwest = { version = "0.11.16", features = ["cookies", "json", "native-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+url = "2.3.1"
+urlencoding = "2.1.2"
