@@ -1,6 +1,6 @@
 # <img src="https://user-images.githubusercontent.com/2356749/235068474-5daddf05-54d6-4391-ae97-1a944aebdec6.png" style="height: 32px"> Google Bard CLI
 
-A simple command line interface for interacting with Google Bard, written in Rust.
+A simple command line interface for interacting with Google Bard, written in Rust. This CLI allows you to save chat history as a Markdown file at a specified absolute or relative path and handles graceful exit with Ctrl+C.
 
 ![image](https://user-images.githubusercontent.com/2356749/235073061-acf3d242-7486-454e-8ad8-92bfe9d80dd1.png)
 
@@ -49,11 +49,19 @@ Before using the Google Bard CLI, you need to obtain your session cookie. To get
 
 Now you can use the Google Bard CLI:
 
+It'll save as your first prompt message. (eg: "Hey yo" -> bard_hey_yo.md)
+
 ```
-bard-rs --session <your_session_cookie>
+bard-rs --session <your_session_cookie> --path ./
 ```
 
 Replace `<your_session_cookie>` with the value you copied from the Developer Tools.
+
+If you don't want to save the chat history as a Markdown file, skip `--path`:
+
+```
+bard-rs --session <your_session_cookie>
+```
 
 ## Commands
 

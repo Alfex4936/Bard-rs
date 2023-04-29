@@ -5,17 +5,33 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::error::Error;
 use std::io::{stdout, Write};
+use std::path::PathBuf;
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::time::Duration;
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 use url::form_urlencoded;
 
 use clap::Parser;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 /// Google Bard CLI
 #[derive(Parser, Debug)]
 #[command(author = "Seok Won Choi", version, about = "Google Bard CLI in Rust", long_about = None)]
 struct Args {
-    /// Name of the person to greet
+    /// __Secure-1PSID
     #[arg(short, long, help = "About 71 length long, including '.' in the end.")]
     session: String,
+
+    /// Markdown
+    #[arg(
+        short,
+        long,
+        help = "Path to save the chat as markdown file if available",
+        default_value = ""
+    )]
+    path: String,
 }
 
 struct Chatbot {
@@ -180,35 +196,102 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let session_id = args.session;
     let mut chatbot = Chatbot::new(&session_id).await?;
 
-    let mut exit = false;
-    while !exit {
+    let mut chat_history = String::new();
+    let mut first_input = true;
+    let mut file_name = String::from("bard.md");
+
+    // Create a shared exit flag using Arc<AtomicBool>
+    let exit_flag = Arc::new(AtomicBool::new(false));
+    let exit_flag_signal_handler = exit_flag.clone();
+
+    // Spawn a separate task to listen for the ctrl+c signal
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.unwrap();
+        exit_flag_signal_handler.store(true, Ordering::SeqCst);
+    });
+
+    let (input_tx, input_rx) = mpsc::channel();
+
+    // Spawn a separate thread for reading user input
+    // likely because stdin internally uses spawn_blocking, so it is impossible to interrupt the read.
+    std::thread::spawn(move || loop {
+        let mut input = String::new();
+        if let Ok(_) = std::io::stdin().read_line(&mut input) {
+            if let Err(_) = input_tx.send(input) {
+                break;
+            }
+        } else {
+            break;
+        }
+    });
+
+    'outer: while !exit_flag.load(Ordering::SeqCst) {
         print!("You: ");
         stdout().flush().unwrap(); // Flush the output
 
         let mut input = String::new();
-        std::io::stdin().read_line(&mut input).unwrap();
+        loop {
+            // Receive input from the input thread with a timeout
+            match input_rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(line) => {
+                    input = line;
+                    break;
+                }
+                Err(RecvTimeoutError::Timeout) => {
+                    if exit_flag.load(Ordering::SeqCst) {
+                        println!("\nCtrl+C detected, exiting...");
+                        break 'outer;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
 
         let input = input.trim();
 
+        if first_input {
+            // Create a file name based on the first input, with a maximum of 10 characters
+            let truncated_input = input
+                .chars()
+                .take(10)
+                .collect::<String>()
+                .to_ascii_lowercase();
+            let file_safe_input = truncated_input.replace(" ", "_");
+            file_name = format!("bard_{}.md", file_safe_input);
+            first_input = false;
+        }
+
         if input == "!exit" {
-            exit = true;
+            exit_flag.store(true, Ordering::SeqCst);
         } else if input == "!reset" {
             chatbot.conversation_id.clear();
             chatbot.response_id.clear();
             chatbot.choice_id.clear();
         } else {
+            chat_history.push_str(&format!("**You**: {}\n\n", input));
+
             // println!("{}", input); // Print the user's input
             print!("Bard: thinking...");
             stdout().flush().unwrap(); // Flush the output
 
             let response = chatbot.ask(input).await?;
+            let response_content = response.get("content").unwrap().as_str().unwrap();
 
             // Use \r to move the cursor to the beginning of the line and print the response
-            println!(
-                "\rBard: {}",
-                response.get("content").unwrap().as_str().unwrap()
-            );
+            println!("\rBard: {}", response_content);
+            chat_history.push_str(&format!("**Bard**: {}\n\n", response_content));
         }
+    }
+
+    // Save chat_history to the file if the path is provided
+    if !args.path.is_empty() {
+        let mut save_path = PathBuf::from(&args.path);
+        save_path.push(&file_name);
+
+        let mut file = File::create(&save_path).await?;
+        file.write_all(chat_history.as_bytes()).await?;
+
+        println!("\nChat history saved as '{}'", save_path.display());
     }
 
     Ok(())
