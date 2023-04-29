@@ -22,7 +22,7 @@ use std::sync::Arc;
 struct Args {
     /// __Secure-1PSID
     #[arg(short, long, help = "About 71 length long, including '.' in the end.")]
-    session: String,
+    session: Option<String>,
 
     /// Markdown
     #[arg(
@@ -32,6 +32,15 @@ struct Args {
         default_value = ""
     )]
     path: String,
+
+    /// Env
+    #[arg(
+        short,
+        long,
+        help = "Path to .env file if available",
+        default_value = ""
+    )]
+    env: String,
 }
 
 struct Chatbot {
@@ -193,7 +202,16 @@ impl Chatbot {
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
-    let session_id = args.session;
+    // Load .env file if the path is provided
+    if !args.env.is_empty() {
+        dotenv::from_path(args.env).ok();
+    }
+
+    let session_id = args
+        .session
+        .or_else(|| std::env::var("SESSION_ID").ok())
+        .expect("No session ID provided. Either pass it with -s or provide a .env file");
+
     let mut chatbot = Chatbot::new(&session_id).await?;
 
     let mut chat_history = String::new();

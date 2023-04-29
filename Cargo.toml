@@ -1,6 +1,6 @@
 [package]
 name = "bard-rs"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2021"
 authors = ["Seok Won Choi <ikr@kakao.com>"]
 description = "Google Bard CLI"
@@ -10,6 +10,7 @@ keywords = ["Google", "Bard", "CLI"]
 
 [dependencies]
 clap = { version = "4.2.5", features = ["derive"] }
+dotenv = "0.15.0"
 flate2 = "1.0.25"
 rand = "0.8.5"
 regex = "1.8.1"

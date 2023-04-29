@@ -78,6 +78,18 @@ If you don't want to save the chat history as a Markdown file, skip `--path`:
 bard-rs --session <your_session_cookie>
 ```
 
+If you don't want to pass that long session in terminal, use `.env` file
+
+```
+bard-rs -e .env -p ./
+```
+
+`.env` file must contain `SESSION_ID` key.
+
+```
+SESSION_ID=~.
+```
+
 ## Commands
 
 - Type your message and press Enter to send it to Google Bard.
