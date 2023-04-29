@@ -4,6 +4,21 @@ A simple command line interface for interacting with Google Bard, written in Rus
 
 ![image](https://user-images.githubusercontent.com/2356749/235073061-acf3d242-7486-454e-8ad8-92bfe9d80dd1.png)
 
+**Bard**: Sure, here is a joke with Python code:
+
+```python
+def make_joke():
+  """This function returns a random joke about Python."""
+  jokes = [
+    "Why did the Python programmer get fired?\nHe kept trying to parse HTML.",
+    "What do you call a Python programmer who can't code?\nA debugger.",
+    "What do you call a Python programmer who can't debug?\nA manager.",
+  ]
+  return random.choice(jokes)
+
+print(make_joke())
+```
+
 ## Prerequisites
 
 You need to have Rust and Cargo installed on your system. If you don't have them, you can install them from the [official Rust website](https://www.rust-lang.org/tools/install).
