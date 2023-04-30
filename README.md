@@ -9,7 +9,6 @@ and handles graceful exit with Ctrl+C.
 ![image](https://user-images.githubusercontent.com/2356749/235073061-acf3d242-7486-454e-8ad8-92bfe9d80dd1.png)
 
 ![output](https://user-images.githubusercontent.com/2356749/235344630-c39a286e-039d-4a45-bce2-e2c7f28a5008.gif)
-```
 
 ## Prerequisites
 
