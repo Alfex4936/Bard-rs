@@ -8,7 +8,6 @@ use std::io::{stdout, Write};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::Duration;
-use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use url::form_urlencoded;
 
@@ -146,7 +145,7 @@ impl Chatbot {
 
         if let Some(chat_data) = chat_data {
             if let Value::String(chat_data_str) = chat_data {
-                let json_chat_data: Vec<Value> = serde_json::from_str(&chat_data_str)?;
+                let json_chat_data: Vec<Value> = serde_json::from_str(chat_data_str)?;
 
                 results.insert("content".to_string(), json_chat_data[0][0].clone());
                 results.insert("conversation_id".to_string(), json_chat_data[1][0].clone());
@@ -196,6 +195,24 @@ impl Chatbot {
 
         Ok(results)
     }
+
+    fn reset(&mut self) {
+        self.conversation_id.clear();
+        self.response_id.clear();
+        self.choice_id.clear();
+    }
+}
+
+async fn append_to_file(file_path: &PathBuf, content: &str) -> Result<(), Box<dyn Error>> {
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(file_path)
+        .await?;
+
+    file.write_all(content.as_bytes()).await?;
+    Ok(())
 }
 
 #[tokio::main]
@@ -214,13 +231,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut chatbot = Chatbot::new(&session_id).await?;
 
-    let mut chat_history = String::new();
-    let mut first_input = true;
-    let mut file_name = String::from("bard.md");
-
     // Create a shared exit flag using Arc<AtomicBool>
     let exit_flag = Arc::new(AtomicBool::new(false));
     let exit_flag_signal_handler = exit_flag.clone();
+    let (input_tx, input_rx) = mpsc::channel();
 
     // Spawn a separate task to listen for the ctrl+c signal
     tokio::spawn(async move {
@@ -228,20 +242,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
         exit_flag_signal_handler.store(true, Ordering::SeqCst);
     });
 
-    let (input_tx, input_rx) = mpsc::channel();
-
     // Spawn a separate thread for reading user input
     // likely because stdin internally uses spawn_blocking, so it is impossible to interrupt the read.
     std::thread::spawn(move || loop {
         let mut input = String::new();
-        if let Ok(_) = std::io::stdin().read_line(&mut input) {
-            if let Err(_) = input_tx.send(input) {
+        if std::io::stdin().read_line(&mut input).is_ok() {
+            if input_tx.send(input).is_err() {
                 break;
             }
         } else {
             break;
         }
     });
+
+    let mut first_input = true;
+    let mut file_path = None;
 
     'outer: while !exit_flag.load(Ordering::SeqCst) {
         print!("You: ");
@@ -268,27 +283,41 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let input = input.trim();
 
         if first_input {
-            // Create a file name based on the first input, with a maximum of 10 characters
-            let truncated_input = input
-                .chars()
-                .take(10)
-                .collect::<String>()
-                .to_ascii_lowercase();
-            let file_safe_input = truncated_input.replace(" ", "_");
-            file_name = format!("bard_{}.md", file_safe_input);
+            let file_name = {
+                let safe_input = input
+                    .chars()
+                    .take(10)
+                    .collect::<String>()
+                    .to_ascii_lowercase()
+                    .replace(' ', "_");
+                let safe_input = safe_input.trim_start_matches(|c: char| !c.is_alphanumeric());
+                if safe_input.is_empty() {
+                    "bard.md".to_string()
+                } else {
+                    format!("bard_{}.md", safe_input)
+                }
+            };
+
             first_input = false;
+
+            file_path = if !args.path.is_empty() {
+                let mut save_path = PathBuf::from(&args.path);
+                save_path.push(&file_name);
+                Some(save_path)
+            } else {
+                None
+            };
         }
 
         if input == "!exit" {
             exit_flag.store(true, Ordering::SeqCst);
         } else if input == "!reset" {
-            chatbot.conversation_id.clear();
-            chatbot.response_id.clear();
-            chatbot.choice_id.clear();
+            chatbot.reset();
         } else {
-            chat_history.push_str(&format!("**You**: {}\n\n", input));
+            if let Some(file_path) = &file_path {
+                append_to_file(file_path, &format!("**You**: {}\n\n", input)).await?;
+            }
 
-            // println!("{}", input); // Print the user's input
             print!("Bard: thinking...");
             stdout().flush().unwrap(); // Flush the output
 
@@ -296,20 +325,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let response_content = response.get("content").unwrap().as_str().unwrap();
 
             // Use \r to move the cursor to the beginning of the line and print the response
-            println!("\rBard: {}", response_content);
-            chat_history.push_str(&format!("**Bard**: {}\n\n", response_content));
+            println!("\rBard: {}\n", response_content);
+
+            if let Some(file_path) = &file_path {
+                append_to_file(file_path, &format!("**Bard**: {}\n\n", response_content)).await?;
+            }
         }
-    }
-
-    // Save chat_history to the file if the path is provided
-    if !args.path.is_empty() {
-        let mut save_path = PathBuf::from(&args.path);
-        save_path.push(&file_name);
-
-        let mut file = File::create(&save_path).await?;
-        file.write_all(chat_history.as_bytes()).await?;
-
-        println!("\nChat history saved as '{}'", save_path.display());
     }
 
     Ok(())

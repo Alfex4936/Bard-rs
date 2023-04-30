@@ -1,6 +1,6 @@
 [package]
 name = "bard-rs"
-version = "1.0.3"
+version = "1.0.4"
 edition = "2021"
 authors = ["Seok Won Choi <ikr@kakao.com>"]
 description = "Google Bard CLI"
@@ -21,3 +21,14 @@ serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
 url = "2.3.1"
 urlencoding = "2.1.2"
+
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = 'unwind'
+incremental = false
+overflow-checks = false
