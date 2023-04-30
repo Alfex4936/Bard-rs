@@ -8,19 +8,7 @@ and handles graceful exit with Ctrl+C.
 
 ![image](https://user-images.githubusercontent.com/2356749/235073061-acf3d242-7486-454e-8ad8-92bfe9d80dd1.png)
 
-**Bard**: Sure, here is a joke with Python code:
-
-```python
-def make_joke():
-  """This function returns a random joke about Python."""
-  jokes = [
-    "Why did the Python programmer get fired?\nHe kept trying to parse HTML.",
-    "What do you call a Python programmer who can't code?\nA debugger.",
-    "What do you call a Python programmer who can't debug?\nA manager.",
-  ]
-  return random.choice(jokes)
-
-print(make_joke())
+![output](https://user-images.githubusercontent.com/2356749/235344630-c39a286e-039d-4a45-bce2-e2c7f28a5008.gif)
 ```
 
 ## Prerequisites
