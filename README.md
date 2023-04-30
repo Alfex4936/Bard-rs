@@ -1,6 +1,10 @@
 # <img src="https://user-images.githubusercontent.com/2356749/235068474-5daddf05-54d6-4391-ae97-1a944aebdec6.png" style="height: 32px"> Google Bard CLI
 
-A simple command line interface for interacting with Google Bard, written in Rust. This CLI allows you to save chat history as a Markdown file at a specified absolute or relative path and handles graceful exit with Ctrl+C.
+A simple command line interface for interacting with Google Bard, written in Rust.
+
+This CLI allows you to save chat history as a Markdown file at a specified absolute or relative path in realtime
+
+and handles graceful exit with Ctrl+C.
 
 ![image](https://user-images.githubusercontent.com/2356749/235073061-acf3d242-7486-454e-8ad8-92bfe9d80dd1.png)
 
