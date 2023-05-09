@@ -1,6 +1,6 @@
 [package]
 name = "bard-rs"
-version = "1.0.6"
+version = "1.0.7"
 edition = "2021"
 authors = ["Seok Won Choi <ikr@kakao.com>"]
 description = "Google Bard CLI"
@@ -9,6 +9,7 @@ repository = "https://github.com/Alfex4936/Bard-rs"
 keywords = ["Google", "Bard", "CLI"]
 
 [dependencies]
+async-openai = "0.10.3"
 clap = { version = "4.2.5", features = ["derive"] }
 dotenv = "0.15.0"
 flate2 = "1.0.25"

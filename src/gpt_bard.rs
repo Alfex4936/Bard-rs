@@ -15,6 +15,11 @@ use clap::Parser;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use async_openai::{
+    types::{ChatCompletionRequestMessageArgs, CreateChatCompletionRequestArgs, Role},
+    Client as OpenAIClient,
+};
+
 /// Google Bard CLI
 #[derive(Parser, Debug)]
 #[command(author = "Seok Won Choi", version, about = "Google Bard CLI in Rust", long_about = None)]
@@ -195,12 +200,6 @@ impl Chatbot {
 
         Ok(results)
     }
-
-    fn reset(&mut self) {
-        self.conversation_id.clear();
-        self.response_id.clear();
-        self.choice_id.clear();
-    }
 }
 
 async fn append_to_file(file_path: &PathBuf, content: &str) -> Result<(), Box<dyn Error>> {
@@ -229,6 +228,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .or_else(|| std::env::var("SESSION_ID").ok())
         .expect("No session ID provided. Either pass it with -s or provide a .env file");
 
+    let openai_key = std::env::var("API_KEY").expect("API_KEY not set");
+    let openai_client = OpenAIClient::new().with_api_key(openai_key.clone());
+
     let mut chatbot = Chatbot::new(&session_id).await?;
 
     // Create a shared exit flag using Arc<AtomicBool>
@@ -255,19 +257,71 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
-    let mut first_input = true;
-    let mut file_path = None;
+    let file_path = if !args.path.is_empty() {
+        let mut save_path = PathBuf::from(&args.path);
+        save_path.push("ai.md");
+        Some(save_path)
+    } else {
+        None
+    };
 
-    'outer: while !exit_flag.load(Ordering::SeqCst) {
-        print!("You: ");
+    // Initial message to start the conversation
+    let mut message =
+        String::from("You will have a conversation with me, but my message is from you. Even if there is a loop, you will respond as if there were a new thing said.");
+
+    println!("Starting a conversation with '{message}'");
+
+    'outer: loop {
+        // Bard replies
+        print!("\rBard: thinking...");
         stdout().flush().unwrap(); // Flush the output
 
-        let mut input = String::new();
+        let response = chatbot.ask(&message).await?;
+        let bard_response = response.get("content").unwrap().as_str().unwrap();
+
+        // Use \r to move the cursor to the beginning of the line and print the response
+        println!("\r< Bard: {}\n", bard_response);
+
+        if let Some(file_path) = &file_path {
+            append_to_file(file_path, &format!("**Bard**: {}\n\n", bard_response)).await?;
+        }
+
+        // GPT-3.5 replies
+        print!("\rGPT-3.5: thinking...");
+        stdout().flush().unwrap(); // Flush the output
+
+        // GPT-3.5 talks
+        let gpt3_response =
+            talk_gpt(bard_response.clone(), &openai_client, "gpt-3.5-turbo").await?;
+        println!("\r< GPT-3.5: {}", gpt3_response);
+
+        if let Some(file_path) = &file_path {
+            append_to_file(file_path, &format!("**GPT-3.5**: {}\n\n", gpt3_response)).await?;
+        }
+
+        // GPT-4 replies
+        print!("\rGPT-4: thinking...");
+        stdout().flush().unwrap(); // Flush the output
+
+        // GPT-4 talks
+        let gpt4_response = talk_gpt(gpt3_response.clone(), &openai_client, "gpt-4").await?;
+        println!("\r> GPT-4: {}", gpt4_response);
+
+        if let Some(file_path) = &file_path {
+            append_to_file(file_path, &format!("**GPT-4**: {}\n\n", gpt4_response)).await?;
+        }
+
+        message = gpt4_response.to_owned(); // Set the new message to Bard's response
+
+        // Wait for user input (press Enter) to continue
+        print!("Press Enter to continue...");
+        stdout().flush().unwrap(); // Flush the output
+
+        // catch ctrl+c
         loop {
             // Receive input from the input thread with a timeout
             match input_rx.recv_timeout(Duration::from_millis(100)) {
-                Ok(line) => {
-                    input = line;
+                Ok(_) => {
                     break;
                 }
                 Err(RecvTimeoutError::Timeout) => {
@@ -279,59 +333,92 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 Err(_) => break,
             }
         }
-
-        let input = input.trim();
-
-        if first_input {
-            let file_name = {
-                let safe_input = input
-                    .chars()
-                    .take(10)
-                    .collect::<String>()
-                    .to_ascii_lowercase()
-                    .replace(' ', "_");
-                let safe_input = safe_input.trim_start_matches(|c: char| !c.is_alphanumeric());
-                if safe_input.is_empty() {
-                    "bard.md".to_string()
-                } else {
-                    format!("bard_{}.md", safe_input)
-                }
-            };
-
-            first_input = false;
-
-            file_path = if !args.path.is_empty() {
-                let mut save_path = PathBuf::from(&args.path);
-                save_path.push(&file_name);
-                Some(save_path)
-            } else {
-                None
-            };
-        }
-
-        if input == "!exit" {
-            exit_flag.store(true, Ordering::SeqCst);
-        } else if input == "!reset" {
-            chatbot.reset();
-        } else {
-            if let Some(file_path) = &file_path {
-                append_to_file(file_path, &format!("**You**: {}\n\n", input)).await?;
-            }
-
-            print!("Bard: thinking...");
-            stdout().flush().unwrap(); // Flush the output
-
-            let response = chatbot.ask(input).await?;
-            let response_content = response.get("content").unwrap().as_str().unwrap();
-
-            // Use \r to move the cursor to the beginning of the line and print the response
-            println!("\rBard: {}\n", response_content);
-
-            if let Some(file_path) = &file_path {
-                append_to_file(file_path, &format!("**Bard**: {}\n\n", response_content)).await?;
-            }
-        }
     }
 
     Ok(())
 }
+
+async fn talk_gpt(
+    interest: String,
+    openai_client: &OpenAIClient,
+    model: &str,
+) -> Result<String, Box<dyn Error>> {
+    let request = CreateChatCompletionRequestArgs::default()
+        .max_tokens(512u16)
+        .model(model)
+        .messages([
+            ChatCompletionRequestMessageArgs::default()
+                .role(Role::System)
+                .content("You are a helpful assistant.")
+                .build()?,
+            ChatCompletionRequestMessageArgs::default()
+                .role(Role::User)
+                .content(interest)
+                .build()?,
+        ])
+        .build()?;
+
+    let response = openai_client.chat().create(request).await?;
+    Ok(response.choices[0].message.content.clone())
+}
+
+/*
+/// group talk
+
+'outer: loop {
+    // Send the message to all AI models and receive their responses
+    let gpt3_5_future = talk_gpt(message.clone(), &openai_client, "gpt-3.5-turbo");
+    let gpt4_future = talk_gpt(message.clone(), &openai_client, "gpt-4");
+    let bard_future = chatbot.ask(&message);
+
+    let (gpt3_5_response, gpt4_response, bard_response) =
+        tokio::join!(gpt3_5_future, gpt4_future, bard_future);
+
+    let gpt3_5_response = gpt3_5_response?;
+    let gpt4_response = gpt4_response?;
+
+    let temp_bard_response = bard_response.expect("Failed to get response from Bard");
+    let bard_response = temp_bard_response.get("content").unwrap().as_str().unwrap();
+
+    // Print and store the responses
+    println!("< GPT-3.5: {}", gpt3_5_response);
+    println!("> GPT-4: {}", gpt4_response);
+    println!("< Bard: {}\n", bard_response);
+
+    if let Some(file_path) = &file_path {
+        append_to_file(file_path, &format!("**GPT-3.5**: {}\n\n", gpt3_5_response)).await?;
+        append_to_file(file_path, &format!("**GPT-4**: {}\n\n", gpt4_response)).await?;
+        append_to_file(file_path, &format!("**Bard**: {}\n\n", bard_response)).await?;
+    }
+
+    // Set the new message based on user input or a randomly selected response from one of the AI models
+    print!("Type a new message or press Enter to continue...");
+    stdout().flush().unwrap(); // Flush the output
+
+    // catch ctrl+c and user input
+    loop {
+        // Receive input from the input thread with a timeout
+        match input_rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(input) => {
+                if input.trim().is_empty() {
+                    // Randomly select a response from one of the AI models as the new message
+                    let responses = vec![&gpt3_5_response, &gpt4_response, bard_response];
+                    message = responses
+                        .choose(&mut rand::thread_rng())
+                        .unwrap()
+                        .to_string();
+                } else {
+                    message = input.trim().to_string();
+                }
+                break;
+            }
+            Err(RecvTimeoutError::Timeout) => {
+                if exit_flag.load(Ordering::SeqCst) {
+                    println!("\nCtrl+C detected, exiting...");
+                    break 'outer;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+*/
