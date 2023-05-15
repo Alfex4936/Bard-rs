@@ -75,7 +75,7 @@ If you don't want to pass that long session in terminal, use `.env` file
 bard-rs -e .env -p ./
 ```
 
-`.env` file must contain `SESSION_ID` key.
+`.env` file must contain `SESSION_ID` key. (the keys being used for the `-s` value and `SESSION_ID` are identical, they are both derived from `__Secure-1PSID`)
 
 ```
 SESSION_ID=~.
