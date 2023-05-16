@@ -75,6 +75,16 @@ If you don't want to pass that long session in terminal, use `.env` file
 bard-rs -e .env -p ./
 ```
 
+If you prefer not to specify a path, `bard-rs` will automatically search for the .env file in the following locations: the argument-provided path, the current working directory, and the directory of the bard-rs binary.
+
+(`-p` is still required if you want to save the chat history as markdown file.)
+
+```
+bard-rs
+```
+
+above command is same as `bard-rs -e .env`
+
 `.env` file must contain `SESSION_ID` key. (the keys being used for the `-s` value and `SESSION_ID` are identical, they are both derived from `__Secure-1PSID`)
 
 ```
