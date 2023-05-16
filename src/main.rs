@@ -18,6 +18,7 @@ use std::sync::Arc;
 /// Google Bard CLI
 #[derive(Parser, Debug)]
 #[command(author = "Seok Won Choi", version, about = "Google Bard CLI in Rust", long_about = None)]
+// #[clap(arg_required_else_help(true))]
 struct Args {
     /// __Secure-1PSID
     #[arg(short, long, help = "About 71 length long, including '.' in the end.")]
@@ -56,7 +57,7 @@ impl Chatbot {
         let cookie = format!("__Secure-1PSID={session_id}");
 
         let mut headers = HeaderMap::new();
-        headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36"));
+        headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36"));
         headers.insert(COOKIE, HeaderValue::from_str(&cookie)?);
 
         let client = reqwest::Client::builder()
@@ -225,8 +226,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let session_id = args
-        .session
+        .session // CHECK 2 times for the .env
         .or_else(|| std::env::var("SESSION_ID").ok())
+        .or_else(|| {
+            dotenv::from_path("./.env").ok(); // where the binary is
+            std::env::var("SESSION_ID").ok()
+        })
+        .or_else(|| {
+            let current_dir = std::env::current_dir().expect("Failed to get current directory");
+            let dotenv_path = current_dir.join(".env");
+            dotenv::from_path(dotenv_path).ok();
+            std::env::var("SESSION_ID").ok()
+        })
+        // check again with current path's .env
         .expect("No session ID provided. Either pass it with -s or provide a .env file");
 
     let mut chatbot = Chatbot::new(&session_id).await?;
@@ -302,6 +314,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             file_path = if !args.path.is_empty() {
                 let mut save_path = PathBuf::from(&args.path);
+                if !args.path.ends_with('/') {
+                    save_path.push("/");
+                }
                 save_path.push(&file_name);
                 Some(save_path)
             } else {
