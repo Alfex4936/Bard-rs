@@ -6,7 +6,9 @@ This CLI allows you to save chat history as a Markdown file at a specified absol
 
 and handles graceful exit with Ctrl+C.
 
-![image](https://user-images.githubusercontent.com/2356749/235073061-acf3d242-7486-454e-8ad8-92bfe9d80dd1.png)
+![image](https://github-production-user-asset-6210df.s3.amazonaws.com/2356749/238815571-3f2658d0-9bc2-4b56-949d-1bcf3bd9ceab.png)
+
+---
 
 ![output](https://user-images.githubusercontent.com/2356749/235344630-c39a286e-039d-4a45-bce2-e2c7f28a5008.gif)
 
