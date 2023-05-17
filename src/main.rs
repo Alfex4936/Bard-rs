@@ -1,3 +1,4 @@
+use colored::Colorize;
 use rand::Rng;
 use regex::Regex;
 use reqwest::header::{HeaderMap, HeaderValue, COOKIE, USER_AGENT};
@@ -273,8 +274,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut first_input = true;
     let mut file_path = None;
 
+    let you = "You".bright_green();
+    let bard = "Bard".bright_cyan();
+
     'outer: while !exit_flag.load(Ordering::SeqCst) {
-        print!("You: ");
+        print!("{}: ", you);
         stdout().flush().unwrap(); // Flush the output
 
         let mut input = String::new();
@@ -336,14 +340,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 append_to_file(file_path, &format!("**You**: {}\n\n", input)).await?;
             }
 
-            print!("Bard: thinking...");
+            print!("{}: thinking...", bard);
             stdout().flush().unwrap(); // Flush the output
 
             let response = chatbot.ask(input).await?;
             let response_content = response.get("content").unwrap().as_str().unwrap();
 
             // Use \r to move the cursor to the beginning of the line and print the response
-            println!("\rBard: {}\n", response_content);
+            println!("\r{}: {}\n", bard, response_content);
 
             if let Some(file_path) = &file_path {
                 append_to_file(file_path, &format!("**Bard**: {}\n\n", response_content)).await?;

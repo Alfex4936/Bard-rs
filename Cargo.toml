@@ -1,6 +1,6 @@
 [package]
 name = "bard-rs"
-version = "1.1.1"
+version = "1.1.2"
 edition = "2021"
 authors = ["Seok Won Choi <ikr@kakao.com>"]
 description = "Google Bard CLI"
@@ -15,7 +15,7 @@ dotenv = "0.15.0"
 flate2 = "1.0.25"
 rand = "0.8.5"
 regex = "1.8.1"
-
+colored = "2.0"
 reqwest = { version = "0.11.16", features = ["cookies", "json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
