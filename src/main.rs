@@ -226,19 +226,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let session_id = args
-        .session // CHECK 2 times for the .env
+        .session
         .or_else(|| std::env::var("SESSION_ID").ok())
         .or_else(|| {
-            dotenv::from_path("./.env").ok(); // where the binary is
+            // Try loading .env from the current directory
+            dotenv::dotenv().ok();
             std::env::var("SESSION_ID").ok()
         })
         .or_else(|| {
-            let current_dir = std::env::current_dir().expect("Failed to get current directory");
-            let dotenv_path = current_dir.join(".env");
-            dotenv::from_path(dotenv_path).ok();
-            std::env::var("SESSION_ID").ok()
+            // Try loading .env from the binary's directory
+            if let Ok(bin_path) = std::env::current_exe() {
+                dotenv::from_path(bin_path.with_file_name(".env")).ok();
+                std::env::var("SESSION_ID").ok()
+            } else {
+                None
+            }
         })
-        // check again with current path's .env
         .expect("No session ID provided. Either pass it with -s or provide a .env file");
 
     let mut chatbot = Chatbot::new(&session_id).await?;
