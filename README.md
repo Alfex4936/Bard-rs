@@ -16,6 +16,14 @@ You need to have Rust and Cargo installed on your system. If you don't have them
 
 ## Installation
 
+Install from cargo.
+
+```bash
+cargo install bard-rs
+```
+
+or
+
 1. Clone the repository to your local machine:
 
    ```
@@ -35,13 +43,6 @@ You need to have Rust and Cargo installed on your system. If you don't have them
    ```
 
 The executable binary file will be located in the `target/release` folder.
-
-
-or install from cargo.
-
-```bash
-cargo install bard-rs
-```
 
 ## Usage
 
