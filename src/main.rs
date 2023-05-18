@@ -2,19 +2,65 @@ use colored::Colorize;
 use rand::Rng;
 use regex::Regex;
 use reqwest::header::{HeaderMap, HeaderValue, COOKIE, USER_AGENT};
+
+use rustyline::error::ReadlineError;
+
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::error::Error;
 use std::io::{stdout, Write};
 use std::path::PathBuf;
-use std::sync::mpsc::{self, RecvTimeoutError};
-use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use url::form_urlencoded;
 
 use clap::Parser;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+
+use std::borrow::Cow::{self, Borrowed, Owned};
+
+use rustyline::completion::FilenameCompleter;
+use rustyline::highlight::{Highlighter, MatchingBracketHighlighter};
+use rustyline::hint::HistoryHinter;
+use rustyline::validate::MatchingBracketValidator;
+use rustyline::{Completer, Helper, Hinter, Validator};
+use rustyline::{CompletionType, Config, EditMode, Editor};
+
+#[derive(Helper, Completer, Hinter, Validator)]
+struct MyHelper {
+    #[rustyline(Completer)]
+    completer: FilenameCompleter,
+    highlighter: MatchingBracketHighlighter,
+    #[rustyline(Validator)]
+    validator: MatchingBracketValidator,
+    #[rustyline(Hinter)]
+    hinter: HistoryHinter,
+    colored_prompt: String,
+}
+
+impl Highlighter for MyHelper {
+    fn highlight_prompt<'b, 's: 'b, 'p: 'b>(
+        &'s self,
+        prompt: &'p str,
+        default: bool,
+    ) -> Cow<'b, str> {
+        if default {
+            Borrowed(&self.colored_prompt)
+        } else {
+            Borrowed(prompt)
+        }
+    }
+
+    fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
+        Owned("\x1b[1m".to_owned() + hint + "\x1b[m")
+    }
+
+    fn highlight<'l>(&self, line: &'l str, pos: usize) -> Cow<'l, str> {
+        self.highlighter.highlight(line, pos)
+    }
+
+    fn highlight_char(&self, line: &str, pos: usize) -> bool {
+        self.highlighter.highlight_char(line, pos)
+    }
+}
 
 /// Google Bard CLI
 #[derive(Parser, Debug)]
@@ -247,110 +293,99 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut chatbot = Chatbot::new(&session_id).await?;
 
-    // Create a shared exit flag using Arc<AtomicBool>
-    let exit_flag = Arc::new(AtomicBool::new(false));
-    let exit_flag_signal_handler = exit_flag.clone();
-    let (input_tx, input_rx) = mpsc::channel();
-
-    // Spawn a separate task to listen for the ctrl+c signal
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.unwrap();
-        exit_flag_signal_handler.store(true, Ordering::SeqCst);
-    });
-
-    // Spawn a separate thread for reading user input
-    // likely because stdin internally uses spawn_blocking, so it is impossible to interrupt the read.
-    std::thread::spawn(move || loop {
-        let mut input = String::new();
-        if std::io::stdin().read_line(&mut input).is_ok() {
-            if input_tx.send(input).is_err() {
-                break;
-            }
-        } else {
-            break;
-        }
-    });
-
     let mut first_input = true;
     let mut file_path = None;
 
-    let you = "You".bright_green();
-    let bard = "Bard".bright_cyan();
+    let bard = "Bard:".bright_cyan();
 
-    'outer: while !exit_flag.load(Ordering::SeqCst) {
-        print!("{}: ", you);
-        stdout().flush().unwrap(); // Flush the output
+    let config = Config::builder()
+        .history_ignore_space(true)
+        .completion_type(CompletionType::List)
+        .edit_mode(EditMode::Emacs)
+        .build();
+    let h = MyHelper {
+        completer: FilenameCompleter::new(),
+        highlighter: MatchingBracketHighlighter::new(),
+        hinter: HistoryHinter {},
+        colored_prompt: "".to_owned(),
+        validator: MatchingBracketValidator::new(),
+    };
+    let mut rl = Editor::with_config(config)?;
+    rl.set_helper(Some(h));
 
-        let mut input = String::new();
-        loop {
-            // Receive input from the input thread with a timeout
-            match input_rx.recv_timeout(Duration::from_millis(100)) {
-                Ok(line) => {
-                    input = line;
-                    break;
+    let p = format!("You: ");
+    loop {
+        rl.helper_mut().expect("No helper").colored_prompt = format!("\x1b[1;32m{p}\x1b[0m");
+        let readline = rl.readline(&p);
+        match readline {
+            Ok(line) => {
+                let input = line.trim();
+
+                if first_input {
+                    let file_name = {
+                        let safe_input = input
+                            .chars()
+                            .take(10)
+                            .collect::<String>()
+                            .to_ascii_lowercase()
+                            .replace(' ', "_");
+                        let safe_input =
+                            safe_input.trim_start_matches(|c: char| !c.is_alphanumeric());
+                        if safe_input.is_empty() {
+                            "bard.md".to_string()
+                        } else {
+                            format!("bard_{}.md", safe_input)
+                        }
+                    };
+
+                    first_input = false;
+
+                    file_path = if !args.path.is_empty() {
+                        let mut save_path = PathBuf::from(&args.path);
+                        if !args.path.ends_with('/') {
+                            save_path.push("/");
+                        }
+                        save_path.push(&file_name);
+                        Some(save_path)
+                    } else {
+                        None
+                    };
                 }
-                Err(RecvTimeoutError::Timeout) => {
-                    if exit_flag.load(Ordering::SeqCst) {
-                        println!("\nCtrl+C detected, exiting...");
-                        break 'outer;
+
+                if input == "!exit" {
+                    break;
+                } else if input == "!reset" {
+                    chatbot.reset();
+                } else {
+                    if let Some(file_path) = &file_path {
+                        append_to_file(file_path, &format!("**You**: {}\n\n", input)).await?;
+                    }
+
+                    print!("{} thinking...", bard);
+                    stdout().flush().unwrap(); // Flush the output
+
+                    let response = chatbot.ask(input).await?;
+                    let response_content = response.get("content").unwrap().as_str().unwrap();
+
+                    // Use \r to move the cursor to the beginning of the line and print the response
+                    println!("\r{} {}\n", bard, response_content);
+
+                    if let Some(file_path) = &file_path {
+                        append_to_file(file_path, &format!("**Bard**: {}\n\n", response_content))
+                            .await?;
                     }
                 }
-                Err(_) => break,
             }
-        }
-
-        let input = input.trim();
-
-        if first_input {
-            let file_name = {
-                let safe_input = input
-                    .chars()
-                    .take(10)
-                    .collect::<String>()
-                    .to_ascii_lowercase()
-                    .replace(' ', "_");
-                let safe_input = safe_input.trim_start_matches(|c: char| !c.is_alphanumeric());
-                if safe_input.is_empty() {
-                    "bard.md".to_string()
-                } else {
-                    format!("bard_{}.md", safe_input)
-                }
-            };
-
-            first_input = false;
-
-            file_path = if !args.path.is_empty() {
-                let mut save_path = PathBuf::from(&args.path);
-                if !args.path.ends_with('/') {
-                    save_path.push("/");
-                }
-                save_path.push(&file_name);
-                Some(save_path)
-            } else {
-                None
-            };
-        }
-
-        if input == "!exit" {
-            exit_flag.store(true, Ordering::SeqCst);
-        } else if input == "!reset" {
-            chatbot.reset();
-        } else {
-            if let Some(file_path) = &file_path {
-                append_to_file(file_path, &format!("**You**: {}\n\n", input)).await?;
+            Err(ReadlineError::Interrupted) => {
+                println!("\nCtrl+C detected, exiting...");
+                break;
             }
-
-            print!("{}: thinking...", bard);
-            stdout().flush().unwrap(); // Flush the output
-
-            let response = chatbot.ask(input).await?;
-            let response_content = response.get("content").unwrap().as_str().unwrap();
-
-            // Use \r to move the cursor to the beginning of the line and print the response
-            println!("\r{}: {}\n", bard, response_content);
-
-            if let Some(file_path) = &file_path {
-                append_to_file(file_path, &format!("**Bard**: {}\n\n", response_content)).await?;
+            Err(ReadlineError::Eof) => {
+                println!("\nCtrl+D detected, exiting...");
+                break;
+            }
+            Err(_) => {
+                continue;
             }
         }
     }
