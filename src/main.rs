@@ -1,23 +1,20 @@
-use colored::Colorize;
-use rand::Rng;
-use regex::Regex;
-use reqwest::header::{HeaderMap, HeaderValue, COOKIE, USER_AGENT};
-
-use rustyline::error::ReadlineError;
-
-use serde_json::{json, Value};
+use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::HashMap;
 use std::error::Error;
 use std::io::{stdout, Write};
 use std::path::PathBuf;
+
+use clap::Parser;
+use colored::Colorize;
+use rand::Rng;
+use regex::Regex;
+use reqwest::header::{HeaderMap, HeaderValue, COOKIE, USER_AGENT};
+use serde_json::{json, Value};
 use tokio::io::AsyncWriteExt;
 use url::form_urlencoded;
 
-use clap::Parser;
-
-use std::borrow::Cow::{self, Borrowed, Owned};
-
 use rustyline::completion::FilenameCompleter;
+use rustyline::error::ReadlineError;
 use rustyline::highlight::{Highlighter, MatchingBracketHighlighter};
 use rustyline::hint::HistoryHinter;
 use rustyline::validate::MatchingBracketValidator;
@@ -310,10 +307,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         colored_prompt: "".to_owned(),
         validator: MatchingBracketValidator::new(),
     };
+
     let mut rl = Editor::with_config(config)?;
     rl.set_helper(Some(h));
 
-    let p = format!("You: ");
+    let p = "You: ";
+
     loop {
         rl.helper_mut().expect("No helper").colored_prompt = format!("\x1b[1;32m{p}\x1b[0m");
         let readline = rl.readline(&p);
