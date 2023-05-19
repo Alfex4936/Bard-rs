@@ -293,14 +293,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut first_input = true;
     let mut file_path = None;
 
-    let bard = "Bard:".bright_cyan();
-
     let config = Config::builder()
         .history_ignore_space(true)
         .completion_type(CompletionType::List)
         .edit_mode(EditMode::Emacs)
         .build();
-    let h = MyHelper {
+
+    let helper = MyHelper {
         completer: FilenameCompleter::new(),
         highlighter: MatchingBracketHighlighter::new(),
         hinter: HistoryHinter {},
@@ -309,43 +308,44 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let mut rl = Editor::with_config(config)?;
-    rl.set_helper(Some(h));
+    rl.set_helper(Some(helper));
 
-    let p = "You: ";
+    let user_prompt = "╭─ You\n╰─> ";
+    let bard_prompt = "╭─ Bard".bright_cyan();
+    let under_arrow = "╰─>".bright_cyan();
 
+    println!("");
     loop {
-        rl.helper_mut().expect("No helper").colored_prompt = format!("\x1b[1;32m{p}\x1b[0m");
-        let readline = rl.readline(&p);
+        rl.helper_mut().expect("No helper").colored_prompt =
+            format!("\x1b[1;32m{p}\x1b[0m", p = user_prompt);
+        let readline = rl.readline(&user_prompt);
+
         match readline {
             Ok(line) => {
                 let input = line.trim();
 
                 if first_input {
-                    let file_name = {
-                        let safe_input = input
-                            .chars()
-                            .take(10)
-                            .collect::<String>()
-                            .to_ascii_lowercase()
-                            .replace(' ', "_");
-                        let safe_input =
-                            safe_input.trim_start_matches(|c: char| !c.is_alphanumeric());
-                        if safe_input.is_empty() {
-                            "bard.md".to_string()
-                        } else {
-                            format!("bard_{}.md", safe_input)
-                        }
+                    let file_name = input
+                        .chars()
+                        .take(10)
+                        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+                        .collect::<String>()
+                        .to_ascii_lowercase()
+                        .replace(' ', "_");
+
+                    let file_name = if file_name.is_empty() {
+                        "bard.md".to_string()
+                    } else {
+                        format!("bard_{}.md", file_name)
                     };
 
                     first_input = false;
-
-                    file_path = if !args.path.is_empty() {
-                        let mut save_path = PathBuf::from(&args.path);
+                    file_path = if !args.path.trim().is_empty() {
+                        let mut path = PathBuf::from(&args.path);
                         if !args.path.ends_with('/') {
-                            save_path.push("/");
+                            path.push("/");
                         }
-                        save_path.push(&file_name);
-                        Some(save_path)
+                        Some(path.join(&file_name))
                     } else {
                         None
                     };
@@ -360,14 +360,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         append_to_file(file_path, &format!("**You**: {}\n\n", input)).await?;
                     }
 
-                    print!("{} thinking...", bard);
+                    println!("\n{}", bard_prompt);
+                    print!("{} thinking...", under_arrow);
                     stdout().flush().unwrap(); // Flush the output
 
                     let response = chatbot.ask(input).await?;
                     let response_content = response.get("content").unwrap().as_str().unwrap();
 
                     // Use \r to move the cursor to the beginning of the line and print the response
-                    println!("\r{} {}\n", bard, response_content);
+                    println!("\r{} {}\n", under_arrow, response_content); // Print the second line
 
                     if let Some(file_path) = &file_path {
                         append_to_file(file_path, &format!("**Bard**: {}\n\n", response_content))
@@ -375,12 +376,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
             }
-            Err(ReadlineError::Interrupted) => {
-                println!("\nCtrl+C detected, exiting...");
-                break;
-            }
-            Err(ReadlineError::Eof) => {
-                println!("\nCtrl+D detected, exiting...");
+            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
+                println!("\nInterrupt signal detected, exiting...");
                 break;
             }
             Err(_) => {

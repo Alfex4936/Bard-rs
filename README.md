@@ -10,6 +10,10 @@ and handles graceful exit with Ctrl+C.
 
 ---
 
+![image](https://github.com/Alfex4936/Bard-rs/assets/2356749/dc164389-452f-4526-a980-b964015849fe)
+
+---
+
 ![output](https://user-images.githubusercontent.com/2356749/235344630-c39a286e-039d-4a45-bce2-e2c7f28a5008.gif)
 
 ## Prerequisites
