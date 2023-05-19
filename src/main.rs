@@ -323,6 +323,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         match readline {
             Ok(line) => {
                 let input = line.trim();
+                rl.add_history_entry(input)?;
 
                 if first_input {
                     let file_name = input
