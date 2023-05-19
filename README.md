@@ -10,7 +10,7 @@ and handles graceful exit with Ctrl+C.
 
 ---
 
-![output](https://user-images.githubusercontent.com/2356749/235344630-c39a286e-039d-4a45-bce2-e2c7f28a5008.gif)
+![output](https://github.com/Alfex4936/Bard-rs/assets/2356749/1a81dc59-2be0-4812-afcc-537c29f71919)
 
 ## Prerequisites
 
