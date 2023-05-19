@@ -94,6 +94,8 @@ above command is same as `bard-rs -e .env`
 
 `.env` file must contain `SESSION_ID` key. (the keys being used for the `-s` value and `SESSION_ID` are identical, they are both derived from `__Secure-1PSID`)
 
+> ! using `echo SESSION_ID=... > .env` might cause encoding problem that `dotenv` cannot read and end up causing no session key error.
+
 ```
 SESSION_ID=~.
 ```
