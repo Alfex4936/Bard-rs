@@ -58,6 +58,8 @@ Before using the Google Bard CLI, you need to obtain your session cookie. To get
 
 Now you can use the Google Bard CLI:
 
+> Supported options: `-s` (session cookie), `-m` (if present, it'll print other Bard's responses for your prompt), `-p` (if present with path, it'll save your chat history as markdown.), `-e` (if present with .env file location, it'll use that session cookie)
+
 It'll save as your first prompt message. (eg: "Hey yo" -> bard_hey_yo.md)
 
 ```
@@ -101,6 +103,7 @@ SESSION_ID=~.
 - Type your message and press Enter to send it to Google Bard.
 - Type `!reset` to reset the conversation.
 - Type `!exit` to exit the CLI.
+- Type `!show` to see other Bard's answers for your last message.
 
 ## License
 

@@ -82,6 +82,10 @@ struct Args {
         default_value = ""
     )]
     env: String,
+
+    /// Multiple answers
+    #[arg(short, long, help = "To show multiple answers at once")]
+    multi: bool,
 }
 
 struct Chatbot {
@@ -188,7 +192,6 @@ impl Chatbot {
         if let Some(chat_data) = chat_data {
             if let Value::String(chat_data_str) = chat_data {
                 let json_chat_data: Vec<Value> = serde_json::from_str(chat_data_str)?;
-
                 results.insert("content".to_string(), json_chat_data[0][0].clone());
                 results.insert("conversation_id".to_string(), json_chat_data[1][0].clone());
                 results.insert("response_id".to_string(), json_chat_data[1][1].clone());
@@ -309,6 +312,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let user_prompt = "╭─ You\n╰─> ";
     let bard_prompt = "╭─ Bard".bright_cyan();
     let under_arrow = "╰─>".bright_cyan();
+    let mut last_response: Option<HashMap<String, Value>> = None;
 
     println!("");
     loop {
@@ -352,6 +356,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     break;
                 } else if input == "!reset" {
                     chatbot.reset();
+                } else if input == "!show" {
+                    if let Some(ref res) = last_response {
+                        println!("\n{}", bard_prompt);
+                        let array = res.get("choices").unwrap().as_array().unwrap();
+
+                        for (i, object) in array.iter().enumerate() {
+                            if let Some(content_array) = object["content"].as_array() {
+                                for string in content_array {
+                                    if let Some(s) = string.as_str() {
+                                        println!("\r{} {}. {}\n", under_arrow, i + 1, s);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } else {
                     if let Some(file_path) = &file_path {
                         append_to_file(file_path, &format!("**You**: {}\n\n", input)).await?;
@@ -364,13 +383,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     let response = chatbot.ask(input).await?;
                     let response_content = response.get("content").unwrap().as_str().unwrap();
 
-                    // Use \r to move the cursor to the beginning of the line and print the response
-                    println!("\r{} {}\n", under_arrow, response_content); // Print the second line
+                    if args.multi {
+                        let array = response.get("choices").unwrap().as_array().unwrap();
+
+                        for (i, object) in array.iter().enumerate() {
+                            if let Some(content_array) = object["content"].as_array() {
+                                for string in content_array {
+                                    if let Some(s) = string.as_str() {
+                                        println!("\r{} {}. {}\n", under_arrow, i + 1, s);
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Use \r to move the cursor to the beginning of the line and print the response
+                        println!("\r{} {}\n", under_arrow, response_content); // Print the second line
+                    }
 
                     if let Some(file_path) = &file_path {
                         append_to_file(file_path, &format!("**Bard**: {}\n\n", response_content))
                             .await?;
                     }
+
+                    last_response = Some(response);
                 }
             }
             Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
