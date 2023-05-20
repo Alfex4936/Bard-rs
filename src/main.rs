@@ -17,7 +17,6 @@ use rustyline::completion::FilenameCompleter;
 use rustyline::error::ReadlineError;
 use rustyline::highlight::{Highlighter, MatchingBracketHighlighter};
 use rustyline::hint::HistoryHinter;
-use rustyline::validate::MatchingBracketValidator;
 use rustyline::{Completer, Helper, Hinter, Validator};
 use rustyline::{CompletionType, Config, EditMode, Editor};
 
@@ -26,8 +25,6 @@ struct MyHelper {
     #[rustyline(Completer)]
     completer: FilenameCompleter,
     highlighter: MatchingBracketHighlighter,
-    #[rustyline(Validator)]
-    validator: MatchingBracketValidator,
     #[rustyline(Hinter)]
     hinter: HistoryHinter,
     colored_prompt: String,
@@ -304,7 +301,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         highlighter: MatchingBracketHighlighter::new(),
         hinter: HistoryHinter {},
         colored_prompt: "".to_owned(),
-        validator: MatchingBracketValidator::new(),
     };
 
     let mut rl = Editor::with_config(config)?;
