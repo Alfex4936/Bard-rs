@@ -1,11 +1,12 @@
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::HashMap;
 use std::error::Error;
-use std::io::{stdout, Write};
 use std::path::PathBuf;
+use std::time::Duration;
 
 use clap::Parser;
 use colored::Colorize;
+use indicatif::{ProgressBar, ProgressStyle, ProgressDrawTarget};
 use rand::Rng;
 use regex::Regex;
 use reqwest::header::{HeaderMap, HeaderValue, COOKIE, USER_AGENT};
@@ -19,6 +20,8 @@ use rustyline::highlight::{Highlighter, MatchingBracketHighlighter};
 use rustyline::hint::HistoryHinter;
 use rustyline::{Completer, Helper, Hinter, Validator};
 use rustyline::{CompletionType, Config, EditMode, Editor};
+
+const LOADING_CHARS: &str = "/-\\|/-\\|";
 
 #[derive(Helper, Completer, Hinter, Validator)]
 struct MyHelper {
@@ -133,6 +136,27 @@ impl Chatbot {
     }
 
     async fn ask(&mut self, message: &str) -> Result<HashMap<String, Value>, Box<dyn Error>> {
+        let progress_bar = ProgressBar::new(100);
+        // let tick_chars = "⠁⠂⠄⡀⢀⠠⠐⠈ ";
+        // let tick_chars = "○○◔◔◑◑◕◕●●◕◕◑◑◔◔ ";
+        // let tick_chars = "▁▁▂▂▃▃▄▄▅▅▆▆▇▇██▇▇▆▆▅▅▄▄▃▃▂▂ ";
+        // let tick_chars = "-\\|/-\\|/";
+        // let tick_chars = "◐◐◓◓◑◑◒◒";
+        // let tick_chars = "/-\\|/-\\|";
+
+        progress_bar.set_style(
+            ProgressStyle::with_template(
+                // "{spinner:.cyan} [{elapsed_precise}] [{wide_bar}] ({percent}%)",
+                "[ {spinner:.cyan} {spinner:.red} {spinner:.yellow} {spinner:.green} ] ({percent}% | {elapsed_precise})",
+            )
+            .unwrap() 
+            .tick_chars(LOADING_CHARS),
+        );
+
+        progress_bar.enable_steady_tick(Duration::from_millis(100));
+        progress_bar.set_draw_target(ProgressDrawTarget::stdout_with_hz(20)); // redraws at most 20 times per second
+        progress_bar.set_position(10u64);
+
         // 3. Send POST request
         let message_struct = json!([
             [message],
@@ -148,7 +172,7 @@ impl Chatbot {
         );
 
         let encoded: String = form_urlencoded::Serializer::new("https://bard.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?".to_string())
-            .append_pair("bl", "boq_assistant-bard-web-server_20230514.20_p0")
+            .append_pair("bl", "boq_assistant-bard-web-server_20230521.19_p0")
             .append_pair("_reqid", &self.reqid.to_string())
             .append_pair("rt", "c")
             .finish();
@@ -167,6 +191,8 @@ impl Chatbot {
             HeaderValue::from_static("https://bard.google.com/"),
         );
 
+        progress_bar.set_position(rand::thread_rng().gen_range(20..40));
+
         let post_resp = self
             .client
             .post(encoded)
@@ -174,6 +200,8 @@ impl Chatbot {
             .body(body_data)
             .send()
             .await?;
+
+        progress_bar.set_position(rand::thread_rng().gen_range(60..90));
 
         // Deserialize the JSON string
         let text = post_resp.text().await?;
@@ -228,6 +256,7 @@ impl Chatbot {
                     self.response_id = response_id.to_owned();
                     self.choice_id = choice_id.to_owned();
                     self.reqid += 100000;
+                    progress_bar.set_position(100u64);
                 } else {
                     eprintln!("Error: couldn't get conversation_id, response_id or choice_id");
                 }
@@ -237,6 +266,8 @@ impl Chatbot {
         } else {
             eprintln!("Error: chat_data not found");
         }
+
+        progress_bar.finish_and_clear();
 
         Ok(results)
     }
@@ -318,7 +349,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     loop {
         rl.helper_mut().expect("No helper").colored_prompt =
             format!("\x1b[1;32m{p}\x1b[0m", p = user_prompt);
-        let readline = rl.readline(&user_prompt);
+        let readline = rl.readline(user_prompt);
 
         match readline {
             Ok(line) => {
@@ -377,10 +408,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
 
                     println!("\n{}", bard_prompt);
-                    print!("{} thinking...", under_arrow);
-                    stdout().flush().unwrap(); // Flush the output
+                    // print!("{} thinking...", under_arrow);
+                    // stdout().flush().unwrap(); // Flush the output
 
                     let response = chatbot.ask(input).await?;
+
+                    print!("\r");
+
                     let response_content = response.get("content").unwrap().as_str().unwrap();
 
                     if args.multi {

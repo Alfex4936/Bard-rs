@@ -1,6 +1,6 @@
 [package]
 name = "bard-rs"
-version = "1.1.7"
+version = "1.1.8"
 edition = "2021"
 authors = ["Seok Won Choi <ikr@kakao.com>"]
 description = "Google Bard CLI"
@@ -23,6 +23,7 @@ tokio = { version = "1", features = ["full"] }
 url = "2.3.1"
 urlencoding = "2.1.2"
 rustyline = { version = "11.0.0", features = ["derive"] }
+indicatif = { version = "0.17.3", features = ["improved_unicode"] }
 
 [profile.release]
 opt-level = 3
