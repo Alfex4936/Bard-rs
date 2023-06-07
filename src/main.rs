@@ -22,7 +22,7 @@ use rustyline::hint::HistoryHinter;
 use rustyline::{Completer, Helper, Hinter, Validator};
 use rustyline::{CompletionType, Config, EditMode, Editor};
 
-const LOADING_CHARS: &str = "/-\\|/-\\|";
+// const LOADING_CHARS: &str = "/-\\|/-\\|";
 
 #[derive(Helper, Completer, Hinter, Validator)]
 struct MyHelper {
@@ -144,7 +144,7 @@ impl Chatbot {
         })
     }
 
-    async fn ask(&mut self, message: &str) -> Result<HashMap<String, Value>, Box<dyn Error>> {
+    async fn ask(&mut self, message: &str, loading_chars: &str) -> Result<HashMap<String, Value>, Box<dyn Error>> {
         let progress_bar = ProgressBar::new(100);
         // let tick_chars = "⠁⠂⠄⡀⢀⠠⠐⠈ ";
         // let tick_chars = "○○◔◔◑◑◕◕●●◕◕◑◑◔◔ ";
@@ -159,7 +159,7 @@ impl Chatbot {
                 "[ {spinner:.cyan} {spinner:.red} {spinner:.yellow} {spinner:.green} ] ({percent}% | {elapsed_precise})",
             )
                 .unwrap()
-                .tick_chars(LOADING_CHARS),
+                .tick_chars(loading_chars),
         );
 
         progress_bar.enable_steady_tick(Duration::from_millis(100));
@@ -181,7 +181,7 @@ impl Chatbot {
         );
 
         let encoded: String = form_urlencoded::Serializer::new("https://bard.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?".to_string())
-            .append_pair("bl", "boq_assistant-bard-web-server_20230521.19_p0")
+            .append_pair("bl", "boq_assistant-bard-web-server_20230531.15_p3")
             .append_pair("_reqid", &self.reqid.to_string())
             .append_pair("rt", "c")
             .finish();
@@ -302,6 +302,8 @@ async fn append_to_file(file_path: &PathBuf, content: &str) -> Result<(), Box<dy
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let mut loading_chars = "/-\\|/-\\|";
+
     let args = Args::parse();
 
     // Load .env file if the path is provided
@@ -319,14 +321,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
         })
         .or_else(|| {
             // Try loading .env from the binary's directory
-            if let Ok(bin_path) = std::env::current_exe() {
-                dotenv::from_path(bin_path.with_file_name(".env")).ok();
+            if let Ok(mut bin_path) = std::env::current_exe() {
+                bin_path.pop();  // Remove the binary name from the path
+                bin_path.push(".env");  // Add .env to the path
+                dotenv::from_path(bin_path).ok();
                 std::env::var("SESSION_ID").ok()
             } else {
                 None
             }
         })
         .expect("No session ID provided. Either pass it with -s or provide a .env file");
+
 
     let mut chatbot = Chatbot::new(&session_id).await?;
 
@@ -351,7 +356,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let user_prompt = "╭─ You\n╰─> ";
     let bard_prompt = "╭─ Bard".bright_cyan();
+    let system_prompt = "╭─ System".bright_red();
     let under_arrow = "╰─>".bright_cyan();
+    let under_arrow_red = "╰─>".bright_red();
     let mut last_response: Option<HashMap<String, Value>> = None;
 
     println!("");
@@ -396,6 +403,62 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     break;
                 } else if input == "!reset" {
                     chatbot.reset();
+                } else if input == "!settings" {
+                    println!("\n{}", system_prompt);
+
+                    let tick_chars = vec![
+                        "⠁⠂⠄⡀⢀⠠⠐⠈",
+                        "○○◔◔◑◑◕◕●●◕◕◑◑◔◔",
+                        "▁▁▂▂▃▃▄▄▅▅▆▆▇▇██▇▇▆▆▅▅▄▄▃▃▂▂",
+                        "-\\|/-\\|/",
+                        "◐◐◓◓◑◑◒◒",
+                        "/-\\|/-\\|",
+                    ];
+
+                    // println!("{} Showing available progress bar designes for 3 seconds...", under_arrow_red);
+
+                    // let m = MultiProgress::new();
+
+                    // let pbs: Vec<ProgressBar> = tick_chars.iter().enumerate().map(|(i, style)| {
+                    //     let pb = m.add(ProgressBar::new(100));
+                    //     pb.set_style(ProgressStyle::with_template(
+                    //         "[ {spinner:.cyan} {spinner:.red} {spinner:.yellow} {spinner:.green} ] ({percent}% | {elapsed_precise})",
+                    //     )
+                    //     .unwrap().tick_chars(style));
+                    //     pb.enable_steady_tick(Duration::from_millis(100));
+                    //     pb.set_position(50);
+                    //     pb
+                    // }).collect();
+                    // // Wait for 3 seconds
+                    // std::thread::sleep(Duration::from_secs(3));
+
+
+
+                    // Abandon all the progress bars.
+                    // for pb in pbs {
+                        //     pb.finish_and_clear();
+                        // }
+
+                        // m.clear().unwrap();
+                    println!("Please select a progress bar style: ");
+
+                    // Display the tick characters
+                    for (i, chars) in tick_chars.iter().enumerate() {
+                        println!("{}. {}", i + 1, chars);
+                    }
+
+                    let mut style_choice = String::new();
+                    std::io::stdin().read_line(&mut style_choice).expect("Failed to read line");
+                    let style_choice: usize = style_choice.trim().parse().expect("Please input a valid number");
+
+                    if style_choice > tick_chars.len() || style_choice < 1 {
+                        println!("Invalid selection.");
+                    } else {
+                        let selected_style = &tick_chars[style_choice - 1];
+                        // ... apply this style to your actual progress bar
+                        println!("Selected style: {}", selected_style);
+                        loading_chars = selected_style;
+                    }
                 } else if input == "!show" {
                     if let Some(ref res) = last_response {
                         println!("\n{}", bard_prompt);
@@ -420,7 +483,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     // print!("{} thinking...", under_arrow);
                     // stdout().flush().unwrap(); // Flush the output
 
-                    let response = chatbot.ask(input).await?;
+                    let response = chatbot.ask(input, loading_chars).await?;
 
                     print!("\r");
 
