@@ -1,5 +1,6 @@
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::HashMap;
+use std::env;
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -70,19 +71,19 @@ struct Args {
 
     /// Markdown
     #[arg(
-        short,
-        long,
-        help = "Path to save the chat as markdown file if available",
-        default_value = ""
+    short,
+    long,
+    help = "Path to save the chat as markdown file if available",
+    default_value = ""
     )]
     path: String,
 
     /// Env
     #[arg(
-        short,
-        long,
-        help = "Path to .env file if available",
-        default_value = ""
+    short,
+    long,
+    help = "Path to .env file if available",
+    default_value = ""
     )]
     env: String,
 
@@ -108,9 +109,17 @@ impl Chatbot {
         headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36"));
         headers.insert(COOKIE, HeaderValue::from_str(&cookie)?);
 
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .build()?;
+        let proxy_server = env::var("http_proxy").unwrap_or("".to_string());
+
+        let mut client_builder = reqwest::Client::builder()
+            .default_headers(headers);
+
+        if !proxy_server.is_empty() {
+            let http = reqwest::Proxy::all(proxy_server)?;
+            client_builder = client_builder.proxy(http);
+        }
+
+        let client = client_builder.build()?;
 
         // 1. GET request to https://bard.google.com/
         let resp = client.get("https://bard.google.com/").send().await?;
@@ -149,8 +158,8 @@ impl Chatbot {
                 // "{spinner:.cyan} [{elapsed_precise}] [{wide_bar}] ({percent}%)",
                 "[ {spinner:.cyan} {spinner:.red} {spinner:.yellow} {spinner:.green} ] ({percent}% | {elapsed_precise})",
             )
-            .unwrap() 
-            .tick_chars(LOADING_CHARS),
+                .unwrap()
+                .tick_chars(LOADING_CHARS),
         );
 
         progress_bar.enable_steady_tick(Duration::from_millis(100));
