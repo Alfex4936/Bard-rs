@@ -1,7 +1,8 @@
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::HashMap;
-use std::env;
+use std::{env, io};
 use std::error::Error;
+use std::io::Read;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -334,6 +335,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 
     let mut chatbot = Chatbot::new(&session_id).await?;
+
+    let mut input = String::new();
+
+    io::stdin().read_to_string(&mut input)?;
+
+    if !input.is_empty() {
+        let response = chatbot.ask(&input, "...").await?;
+        let response_content = response.get("content").unwrap().as_str().unwrap();
+        println!("{}", response_content);
+        std::process::exit(0);
+    }
+
 
     let mut first_input = true;
     let mut file_path = None;
