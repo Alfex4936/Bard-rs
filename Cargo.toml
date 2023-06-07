@@ -24,6 +24,7 @@ url = "2.3.1"
 urlencoding = "2.1.2"
 rustyline = { version = "11.0.0", features = ["derive"] }
 indicatif = { version = "0.17.3", features = ["improved_unicode"] }
+atty = "0.2"
 
 [profile.release]
 opt-level = 3

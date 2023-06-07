@@ -5,6 +5,7 @@ use std::error::Error;
 use std::io::Read;
 use std::path::PathBuf;
 use std::time::Duration;
+use atty::Stream;
 
 use clap::Parser;
 use colored::Colorize;
@@ -336,11 +337,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut chatbot = Chatbot::new(&session_id).await?;
 
-    let mut input = String::new();
 
-    io::stdin().read_to_string(&mut input)?;
-
-    if !input.is_empty() {
+    if !atty::is(atty::Stream::Stdin) {
+        let mut input = String::new();
+        io::stdin().read_to_string(&mut input)?;
         let response = chatbot.ask(&input, "...").await?;
         let response_content = response.get("content").unwrap().as_str().unwrap();
         println!("{}", response_content);
