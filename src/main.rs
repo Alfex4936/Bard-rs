@@ -90,6 +90,10 @@ struct Args {
     /// Multiple answers
     #[arg(short, long, help = "To show multiple answers at once")]
     multi: bool,
+
+    /// Proxy
+    #[arg(short = 'x', long, help = "Proxy server", default_value = "")]
+    proxy: String,
 }
 
 struct Chatbot {
@@ -109,14 +113,12 @@ impl Chatbot {
         headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36"));
         headers.insert(COOKIE, HeaderValue::from_str(&cookie)?);
 
-        let proxy_server = env::var("http_proxy").unwrap_or("".to_string());
-
-        let mut client_builder = reqwest::Client::builder().default_headers(headers);
-
-        if !proxy_server.is_empty() {
-            let http = reqwest::Proxy::all(proxy_server)?;
-            client_builder = client_builder.proxy(http);
-        }
+        let client_builder = match env::var("BARD_PROXY_SERVER") {
+            Ok(proxy_server) if !proxy_server.is_empty() => reqwest::Client::builder()
+                .default_headers(headers)
+                .proxy(reqwest::Proxy::all(&proxy_server)?),
+            _ => reqwest::Client::builder().default_headers(headers),
+        };
 
         let client = client_builder.build()?;
 
@@ -314,21 +316,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
         dotenv::from_path(args.env).ok();
     }
 
+    if !args.proxy.is_empty() {
+        env::set_var("BARD_PROXY_SERVER", args.proxy.as_str());
+    }
+
     let session_id = args
         .session
-        .or_else(|| std::env::var("SESSION_ID").ok())
+        .or_else(|| env::var("SESSION_ID").ok())
         .or_else(|| {
             // Try loading .env from the current directory
             dotenv::dotenv().ok();
-            std::env::var("SESSION_ID").ok()
+            env::var("SESSION_ID").ok()
         })
         .or_else(|| {
             // Try loading .env from the binary's directory
-            if let Ok(mut bin_path) = std::env::current_exe() {
+            if let Ok(mut bin_path) = env::current_exe() {
                 bin_path.pop(); // Remove the binary name from the path
                 bin_path.push(".env"); // Add .env to the path
                 dotenv::from_path(bin_path).ok();
-                std::env::var("SESSION_ID").ok()
+                env::var("SESSION_ID").ok()
             } else {
                 None
             }
