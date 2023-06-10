@@ -1,12 +1,13 @@
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::HashMap;
+use std::env;
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
 use colored::Colorize;
-use indicatif::{ProgressBar, ProgressStyle, ProgressDrawTarget};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rand::Rng;
 use regex::Regex;
 use reqwest::header::{HeaderMap, HeaderValue, COOKIE, USER_AGENT};
@@ -108,9 +109,16 @@ impl Chatbot {
         headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36"));
         headers.insert(COOKIE, HeaderValue::from_str(&cookie)?);
 
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .build()?;
+        let proxy_server = env::var("http_proxy").unwrap_or("".to_string());
+
+        let mut client_builder = reqwest::Client::builder().default_headers(headers);
+
+        if !proxy_server.is_empty() {
+            let http = reqwest::Proxy::all(proxy_server)?;
+            client_builder = client_builder.proxy(http);
+        }
+
+        let client = client_builder.build()?;
 
         // 1. GET request to https://bard.google.com/
         let resp = client.get("https://bard.google.com/").send().await?;
@@ -135,7 +143,11 @@ impl Chatbot {
         })
     }
 
-    async fn ask(&mut self, message: &str, loading_chars: &str) -> Result<HashMap<String, Value>, Box<dyn Error>> {
+    async fn ask(
+        &mut self,
+        message: &str,
+        loading_chars: &str,
+    ) -> Result<HashMap<String, Value>, Box<dyn Error>> {
         let progress_bar = ProgressBar::new(100);
         // let tick_chars = "⠁⠂⠄⡀⢀⠠⠐⠈ ";
         // let tick_chars = "○○◔◔◑◑◕◕●●◕◕◑◑◔◔ ";
@@ -149,8 +161,8 @@ impl Chatbot {
                 // "{spinner:.cyan} [{elapsed_precise}] [{wide_bar}] ({percent}%)",
                 "[ {spinner:.cyan} {spinner:.red} {spinner:.yellow} {spinner:.green} ] ({percent}% | {elapsed_precise})",
             )
-            .unwrap() 
-            .tick_chars(loading_chars),
+                .unwrap()
+                .tick_chars(loading_chars),
         );
 
         progress_bar.enable_steady_tick(Duration::from_millis(100));
@@ -313,8 +325,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .or_else(|| {
             // Try loading .env from the binary's directory
             if let Ok(mut bin_path) = std::env::current_exe() {
-                bin_path.pop();  // Remove the binary name from the path
-                bin_path.push(".env");  // Add .env to the path
+                bin_path.pop(); // Remove the binary name from the path
+                bin_path.push(".env"); // Add .env to the path
                 dotenv::from_path(bin_path).ok();
                 std::env::var("SESSION_ID").ok()
             } else {
@@ -322,7 +334,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         })
         .expect("No session ID provided. Either pass it with -s or provide a .env file");
-
 
     let mut chatbot = Chatbot::new(&session_id).await?;
 
@@ -397,7 +408,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 } else if input == "!settings" {
                     println!("\n{}", system_prompt);
                     println!("{under_arrow_red} Please select a progress bar style: ");
-            
+
                     let tick_chars = vec![
                         "⠁⠂⠄⡀⢀⠠⠐⠈",
                         "○○◔◔◑◑◕◕●●◕◕◑◑◔◔",
@@ -406,11 +417,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         "◐◐◓◓◑◑◒◒",
                         "/-\\|/-\\|",
                     ];
-            
+
                     // println!("{} Showing available progress bar designes for 3 seconds...", under_arrow_red);
-            
+
                     // let m = MultiProgress::new();
-            
+
                     // let pbs: Vec<ProgressBar> = tick_chars.iter().enumerate().map(|(i, style)| {
                     //     let pb = m.add(ProgressBar::new(100));
                     //     pb.set_style(ProgressStyle::with_template(
@@ -424,24 +435,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     // // Wait for 3 seconds
                     // std::thread::sleep(Duration::from_secs(3));
 
-                    
-                    
                     // Abandon all the progress bars.
                     // for pb in pbs {
-                        //     pb.finish_and_clear();
-                        // }
-                        
-                        // m.clear().unwrap();
-                        
-                        // Display the tick characters
-                        for (i, chars) in tick_chars.iter().enumerate() {
-                            println!("{}. {}", i + 1, chars);
-                        }
-                        
+                    //     pb.finish_and_clear();
+                    // }
+
+                    // m.clear().unwrap();
+
+                    // Display the tick characters
+                    for (i, chars) in tick_chars.iter().enumerate() {
+                        println!("{}. {}", i + 1, chars);
+                    }
+
                     let mut style_choice = String::new();
-                    std::io::stdin().read_line(&mut style_choice).expect("Failed to read line");
-                    let style_choice: usize = style_choice.trim().parse().expect("Please input a valid number");
-            
+                    std::io::stdin()
+                        .read_line(&mut style_choice)
+                        .expect("Failed to read line");
+                    let style_choice: usize = style_choice
+                        .trim()
+                        .parse()
+                        .expect("Please input a valid number");
+
                     if style_choice > tick_chars.len() || style_choice < 1 {
                         println!("Invalid selection.");
                     } else {
