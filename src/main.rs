@@ -172,7 +172,7 @@ impl Chatbot {
         );
 
         let encoded: String = form_urlencoded::Serializer::new("https://bard.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?".to_string())
-            .append_pair("bl", "boq_assistant-bard-web-server_20230531.15_p3")
+            .append_pair("bl", "boq_assistant-bard-web-server_20230606.12_p0")
             .append_pair("_reqid", &self.reqid.to_string())
             .append_pair("rt", "c")
             .finish();
@@ -396,6 +396,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     chatbot.reset();
                 } else if input == "!settings" {
                     println!("\n{}", system_prompt);
+                    println!("{under_arrow_red} Please select a progress bar style: ");
             
                     let tick_chars = vec![
                         "⠁⠂⠄⡀⢀⠠⠐⠈",
@@ -431,13 +432,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         // }
                         
                         // m.clear().unwrap();
-                    println!("Please select a progress bar style: ");
-            
-                    // Display the tick characters
-                    for (i, chars) in tick_chars.iter().enumerate() {
-                        println!("{}. {}", i + 1, chars);
-                    }
-            
+                        
+                        // Display the tick characters
+                        for (i, chars) in tick_chars.iter().enumerate() {
+                            println!("{}. {}", i + 1, chars);
+                        }
+                        
                     let mut style_choice = String::new();
                     std::io::stdin().read_line(&mut style_choice).expect("Failed to read line");
                     let style_choice: usize = style_choice.trim().parse().expect("Please input a valid number");
