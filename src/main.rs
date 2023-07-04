@@ -110,7 +110,7 @@ impl Chatbot {
         let cookie = format!("__Secure-1PSID={session_id}");
 
         let mut headers = HeaderMap::new();
-        headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36"));
+        headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"));
         headers.insert(COOKIE, HeaderValue::from_str(&cookie)?);
 
         let client_builder = match env::var("BARD_PROXY_SERVER") {
@@ -186,7 +186,7 @@ impl Chatbot {
         );
 
         let encoded: String = form_urlencoded::Serializer::new("https://bard.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?".to_string())
-            .append_pair("bl", "boq_assistant-bard-web-server_20230606.12_p0")
+            .append_pair("bl", "boq_assistant-bard-web-server_20230702.16_p0")
             .append_pair("_reqid", &self.reqid.to_string())
             .append_pair("rt", "c")
             .finish();
@@ -234,11 +234,12 @@ impl Chatbot {
         if let Some(chat_data) = chat_data {
             if let Value::String(chat_data_str) = chat_data {
                 let json_chat_data: Vec<Value> = serde_json::from_str(chat_data_str)?;
-                results.insert("content".to_string(), json_chat_data[0][0].clone());
+
+                results.insert("content".to_string(), json_chat_data[4][0][1][0].clone());
                 results.insert("conversation_id".to_string(), json_chat_data[1][0].clone());
                 results.insert("response_id".to_string(), json_chat_data[1][1].clone());
-                results.insert("factualityQueries".to_string(), json_chat_data[3].clone());
-                results.insert("textQuery".to_string(), json_chat_data[2][0].clone());
+                // factualityQueries is now null, so I've removed that line
+                results.insert("textQuery".to_string(), json_chat_data[2][0][0].clone());
 
                 let choices: Vec<HashMap<&str, &Value>> = json_chat_data[4]
                     .as_array()
@@ -247,12 +248,24 @@ impl Chatbot {
                     .map(|choice| {
                         let mut choice_map = HashMap::new();
                         choice_map.insert("id", &choice[0]);
-                        choice_map.insert("content", &choice[1]);
+                        choice_map.insert("content", &choice[1][0]);
                         choice_map
                     })
                     .collect();
 
                 results.insert("choices".to_string(), serde_json::json!(choices));
+
+                // Let's also extract the location information
+                if let Some(location) = json_chat_data.get(7) {
+                    let mut location_map = HashMap::new();
+                    if let Value::String(loc_str) = &location[0] {
+                        location_map.insert("address".to_string(), loc_str.clone());
+                    }
+                    if let Value::String(loc_str) = &location[1] {
+                        location_map.insert("place_type".to_string(), loc_str.clone());
+                    }
+                    results.insert("location".to_string(), serde_json::json!(location_map));
+                }
 
                 let conversation_id = results.get("conversation_id").and_then(Value::as_str);
                 let response_id = results.get("response_id").and_then(Value::as_str);
@@ -362,18 +375,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut rl = Editor::with_config(config)?;
     rl.set_helper(Some(helper));
 
-    let user_prompt = "╭─ You\n╰─> ";
+    let user_prompt = "╭─ You".bright_green();
     let bard_prompt = "╭─ Bard".bright_cyan();
     let system_prompt = "╭─ System".bright_red();
     let under_arrow = "╰─>".bright_cyan();
     let under_arrow_red = "╰─>".bright_red();
+    let under_arrow_green = "╰─> ";
     let mut last_response: Option<HashMap<String, Value>> = None;
+
+    use chrono::Local;
 
     println!("");
     loop {
+        let current_time = Local::now().format("%H:%M:%S").to_string();
+        println!("{user_prompt} [{t}]", t = current_time);
         rl.helper_mut().expect("No helper").colored_prompt =
-            format!("\x1b[1;32m{p}\x1b[0m", p = user_prompt);
-        let readline = rl.readline(user_prompt);
+            format!("\x1b[1;32m{p} \x1b[0m", p = under_arrow_green);
+        let readline = rl.readline(under_arrow_green);
 
         match readline {
             Ok(line) => {
@@ -472,7 +490,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
                 } else if input == "!show" {
                     if let Some(ref res) = last_response {
-                        println!("\n{}", bard_prompt);
+                        let current_time = Local::now().format("%H:%M:%S").to_string();
+
+                        println!("\n{bard_prompt} [{current_time}]");
                         let array = res.get("choices").unwrap().as_array().unwrap();
 
                         for (i, object) in array.iter().enumerate() {
@@ -489,12 +509,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     if let Some(file_path) = &file_path {
                         append_to_file(file_path, &format!("**You**: {}\n\n", input)).await?;
                     }
-
-                    println!("\n{}", bard_prompt);
-                    // print!("{} thinking...", under_arrow);
-                    // stdout().flush().unwrap(); // Flush the output
+                    let current_time = Local::now().format("%H:%M:%S").to_string();
+                    println!("\n{bard_prompt} [{current_time}]");
 
                     let response = chatbot.ask(input, loading_chars).await?;
+                    // print!("{} thinking...", under_arrow);
+                    // stdout().flush().unwrap(); // Flush the output
 
                     print!("\r");
 

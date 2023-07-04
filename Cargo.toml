@@ -1,6 +1,6 @@
 [package]
 name = "bard-rs"
-version = "1.1.8"
+version = "1.2.0"
 edition = "2021"
 authors = ["Seok Won Choi <ikr@kakao.com>"]
 description = "Google Bard CLI"
@@ -9,21 +9,25 @@ repository = "https://github.com/Alfex4936/Bard-rs"
 keywords = ["Google", "Bard", "CLI"]
 
 [dependencies]
-async-openai = "0.10.3"
-clap = { version = "4.2.5", features = ["derive"] }
+async-openai = "0.11"
+clap = { version = "4", features = ["derive"] }
 dotenv = "0.15.0"
-flate2 = "1.0.25"
-rand = "0.8.5"
-regex = "1.8.1"
+flate2 = "1.0"
+rand = "0.8"
+regex = "1.8"
 colored = "2.0"
-reqwest = { version = "0.11.16", features = ["cookies", "json"] }
+reqwest = { version = "0.11", features = ["cookies", "json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
-url = "2.3.1"
-urlencoding = "2.1.2"
+url = "2"
+urlencoding = "2"
 rustyline = { version = "11.0.0", features = ["derive"] }
-indicatif = { version = "0.17.3", features = ["improved_unicode"] }
+indicatif = { version = "0.17", features = ["improved_unicode"] }
+chrono = "0.4"
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
 
 [profile.release]
 opt-level = 3
