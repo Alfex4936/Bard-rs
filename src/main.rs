@@ -110,7 +110,7 @@ impl Chatbot {
         let cookie = format!("__Secure-1PSID={session_id}");
 
         let mut headers = HeaderMap::new();
-        headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"));
+        headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"));
         headers.insert(COOKIE, HeaderValue::from_str(&cookie)?);
 
         let client_builder = match env::var("BARD_PROXY_SERVER") {
@@ -186,7 +186,7 @@ impl Chatbot {
         );
 
         let encoded: String = form_urlencoded::Serializer::new("https://bard.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?".to_string())
-            .append_pair("bl", "boq_assistant-bard-web-server_20230702.16_p0")
+            .append_pair("bl", "boq_assistant-bard-web-server_20230723.17_p0")
             .append_pair("_reqid", &self.reqid.to_string())
             .append_pair("rt", "c")
             .finish();
@@ -362,7 +362,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config = Config::builder()
         .history_ignore_space(true)
         .completion_type(CompletionType::List)
-        .edit_mode(EditMode::Emacs)
+        .edit_mode(EditMode::Vi)
         .build();
 
     let helper = MyHelper {
@@ -441,30 +441,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         "◐◐◓◓◑◑◒◒",
                         "/-\\|/-\\|",
                     ];
-
-                    // println!("{} Showing available progress bar designes for 3 seconds...", under_arrow_red);
-
-                    // let m = MultiProgress::new();
-
-                    // let pbs: Vec<ProgressBar> = tick_chars.iter().enumerate().map(|(i, style)| {
-                    //     let pb = m.add(ProgressBar::new(100));
-                    //     pb.set_style(ProgressStyle::with_template(
-                    //         "[ {spinner:.cyan} {spinner:.red} {spinner:.yellow} {spinner:.green} ] ({percent}% | {elapsed_precise})",
-                    //     )
-                    //     .unwrap().tick_chars(style));
-                    //     pb.enable_steady_tick(Duration::from_millis(100));
-                    //     pb.set_position(50);
-                    //     pb
-                    // }).collect();
-                    // // Wait for 3 seconds
-                    // std::thread::sleep(Duration::from_secs(3));
-
-                    // Abandon all the progress bars.
-                    // for pb in pbs {
-                    //     pb.finish_and_clear();
-                    // }
-
-                    // m.clear().unwrap();
 
                     // Display the tick characters
                     for (i, chars) in tick_chars.iter().enumerate() {
