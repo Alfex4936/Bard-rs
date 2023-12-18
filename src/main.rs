@@ -136,7 +136,7 @@ impl Chatbot {
 
         // 2. Extract SNlM0e value using regex
         let re = Regex::new(r#"SNlM0e":"(.*?)""#).unwrap();
-        println!("Extracting SNlM0e {:#?}", re);
+        // println!("Extracting SNlM0e {:#?}", re);
         let snlm0e = re
             .captures(&body)
             .and_then(|caps| caps.get(1).map(|m| m.as_str()))
