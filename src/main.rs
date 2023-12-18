@@ -55,8 +55,8 @@ impl Highlighter for MyHelper {
         self.highlighter.highlight(line, pos)
     }
 
-    fn highlight_char(&self, line: &str, pos: usize) -> bool {
-        self.highlighter.highlight_char(line, pos)
+    fn highlight_char(&self, line: &str, pos: usize, _forced: bool) -> bool {
+        self.highlighter.highlight_char(line, pos, false)
     }
 }
 
@@ -66,8 +66,16 @@ impl Highlighter for MyHelper {
 // #[clap(arg_required_else_help(true))]
 struct Args {
     /// __Secure-1PSID
-    #[arg(short, long, help = "About 71 length long, including '.' in the end.")]
-    session: Option<String>,
+    #[arg(
+        short = 's',
+        long,
+        help = "__Secure-1PSID, about 71 length long, including '.' in the end."
+    )]
+    psid: Option<String>,
+
+    /// __Secure-1PSIDTS
+    #[arg(short = 't', long, help = "__Secure-1PSIDTS")]
+    psidts: Option<String>,
 
     /// Markdown
     #[arg(
@@ -106,11 +114,11 @@ struct Chatbot {
 }
 
 impl Chatbot {
-    pub async fn new(session_id: &str) -> Result<Self, Box<dyn Error>> {
-        let cookie = format!("__Secure-1PSID={session_id}");
+    pub async fn new(_1psid: &str, _1psidts: &str) -> Result<Self, Box<dyn Error>> {
+        let cookie = format!("__Secure-1PSID={_1psid},__Secure-1PSIDTS={_1psidts}");
 
         let mut headers = HeaderMap::new();
-        headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"));
+        headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"));
         headers.insert(COOKIE, HeaderValue::from_str(&cookie)?);
 
         let client_builder = match env::var("BARD_PROXY_SERVER") {
@@ -128,6 +136,7 @@ impl Chatbot {
 
         // 2. Extract SNlM0e value using regex
         let re = Regex::new(r#"SNlM0e":"(.*?)""#).unwrap();
+        println!("Extracting SNlM0e {:#?}", re);
         let snlm0e = re
             .captures(&body)
             .and_then(|caps| caps.get(1).map(|m| m.as_str()))
@@ -186,9 +195,10 @@ impl Chatbot {
         );
 
         let encoded: String = form_urlencoded::Serializer::new("https://bard.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?".to_string())
-            .append_pair("bl", "boq_assistant-bard-web-server_20230723.17_p0")
+            .append_pair("bl", "boq_assistant-bard-web-server_20231214.04_p4")
             .append_pair("_reqid", &self.reqid.to_string())
             .append_pair("rt", "c")
+            .append_pair("hl", "en")
             .finish();
 
         let mut headers = HeaderMap::new();
@@ -333,13 +343,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         env::set_var("BARD_PROXY_SERVER", args.proxy.as_str());
     }
 
-    let session_id = args
-        .session
-        .or_else(|| env::var("SESSION_ID").ok())
+    let _1psid = args
+        .psid
+        .or_else(|| env::var("PSID").ok())
         .or_else(|| {
             // Try loading .env from the current directory
             dotenv::dotenv().ok();
-            env::var("SESSION_ID").ok()
+            env::var("PSID").ok()
         })
         .or_else(|| {
             // Try loading .env from the binary's directory
@@ -347,14 +357,35 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 bin_path.pop(); // Remove the binary name from the path
                 bin_path.push(".env"); // Add .env to the path
                 dotenv::from_path(bin_path).ok();
-                env::var("SESSION_ID").ok()
+                env::var("PSID").ok()
             } else {
                 None
             }
         })
         .expect("No session ID provided. Either pass it with -s or provide a .env file");
 
-    let mut chatbot = Chatbot::new(&session_id).await?;
+    let _1psidts = args
+        .psidts
+        .or_else(|| env::var("PSIDTS").ok())
+        .or_else(|| {
+            // Try loading .env from the current directory
+            dotenv::dotenv().ok();
+            env::var("PSIDTS").ok()
+        })
+        .or_else(|| {
+            // Try loading .env from the binary's directory
+            if let Ok(mut bin_path) = env::current_exe() {
+                bin_path.pop(); // Remove the binary name from the path
+                bin_path.push(".env"); // Add .env to the path
+                dotenv::from_path(bin_path).ok();
+                env::var("PSIDTS").ok()
+            } else {
+                None
+            }
+        })
+        .expect("No session ID provided. Either pass it with -s or provide a .env file");
+
+    let mut chatbot = Chatbot::new(&_1psid, &_1psidts).await?;
 
     let mut first_input = true;
     let mut file_path = None;

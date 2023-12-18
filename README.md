@@ -54,27 +54,27 @@ Before using the Google Bard CLI, you need to obtain your session cookie. To get
 2. Open Chrome Developer Tools (F12 or `Ctrl + Shift + I`).
 3. Go to the "Application" tab.
 4. Under "Storage" > "Cookies", click on "https://bard.google.com".
-5. Find the cookie with the name `__Secure-1PSID`, and copy its value. (it includes "." usually)
+5. Find the cookie with the name `__Secure-1PSID` and `__Secure-1PSIDTS`, and copy the values. (it includes "." usually for 1PSID)
 
 Now you can use the Google Bard CLI:
 
-> Supported options: `-s` (session cookie), `-m` (if present, it'll print other Bard's responses for your prompt), `-p` (if present with path, it'll save your chat history as markdown.), `-e` (if present with .env file location, it'll use that session cookie)
+> Supported options: `-s` (__Secure-1PSID cookie), `-t` (__Secure-1PSIDTS cookie), `-m` (if present, it'll print other Bard's responses for your prompt), `-p` (if present with path, it'll save your chat history as markdown.), `-e` (if present with .env file location, it'll use that session cookie)
 
 It'll save as your first prompt message. (eg: "Hey yo" -> bard_hey_yo.md)
 
 ```
-bard-rs --session <your_session_cookie> --path ./
+bard-rs --psid <your_psid> --psidts <your_psidts> --path ./
 ```
 
-Replace `<your_session_cookie>` with the value you copied from the Developer Tools.
+Replace `<your_psid>` and `<your_psidts>` with the value you copied from the Developer Tools.
 
 If you don't want to save the chat history as a Markdown file, skip `--path`:
 
 ```
-bard-rs --session <your_session_cookie>
+bard-rs --psid <your_psid> --psidts <your_psidts>
 ```
 
-If you don't want to pass that long session in terminal, use `.env` file
+If you don't want to pass that long session in terminal, use `.env` file (refer to `.env_sample`)
 
 ```
 bard-rs -e .env -p ./
@@ -90,9 +90,12 @@ bard-rs
 
 above command is same as `bard-rs -e .env`
 
-`.env` file must contain `SESSION_ID` key. (the keys being used for the `-s` value and `SESSION_ID` are identical, they are both derived from `__Secure-1PSID`)
+`.env` file must contain `PSID` and `PSIDTS` key. (they are both derived from `__Secure-1PSID` and `__Secure-1PSIDTS`)
 
-> ! using `echo SESSION_ID=... > .env` might cause encoding problem that `dotenv` cannot read and end up causing no session key error.
+> ![IMPORTANT]
+> Need `__Secure-1PSID` and `__Secure-1PSIDTS`
+
+> ! using `echo PSID=... > .env` might cause encoding problem that `dotenv` cannot read and end up causing no session key error.
 
 ```
 SESSION_ID=~.
