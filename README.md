@@ -18,7 +18,7 @@ You need to have Rust and Cargo installed on your system. If you don't have them
 
 ## Installation
 
-Install from cargo.
+Install from cargo. Add `-f` at the end to force update. (`cargo install bard-rs -f`)
 
 ```bash
 cargo install bard-rs
@@ -54,7 +54,7 @@ Before using the Google Bard CLI, you need to obtain your session cookie. To get
 2. Open Chrome Developer Tools (F12 or `Ctrl + Shift + I`).
 3. Go to the "Application" tab.
 4. Under "Storage" > "Cookies", click on "https://bard.google.com".
-5. Find the cookie with the name `__Secure-1PSID` and `__Secure-1PSIDTS`, and copy the values. (it includes "." usually for 1PSID)
+5. Find the cookies with the name `__Secure-1PSID` and `__Secure-1PSIDTS`, and copy the values. (it includes "." usually for 1PSID)
 
 Now you can use the Google Bard CLI:
 

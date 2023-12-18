@@ -255,6 +255,7 @@ impl Chatbot {
                     .as_array()
                     .unwrap()
                     .iter()
+                    .skip(1) // skip first answer as default
                     .map(|choice| {
                         let mut choice_map = HashMap::new();
                         choice_map.insert("id", &choice[0]);
@@ -503,12 +504,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         let array = res.get("choices").unwrap().as_array().unwrap();
 
                         for (i, object) in array.iter().enumerate() {
-                            if let Some(content_array) = object["content"].as_array() {
-                                for string in content_array {
-                                    if let Some(s) = string.as_str() {
-                                        println!("\r{} {}. {}\n", under_arrow, i + 1, s);
-                                    }
-                                }
+                            if let Some(content) = object["content"].as_str() {
+                                println!("\r{} {}. {}\n", under_arrow, i + 1, content);
                             }
                         }
                     }
