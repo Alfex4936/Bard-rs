@@ -195,7 +195,7 @@ impl Chatbot {
         );
 
         let encoded: String = form_urlencoded::Serializer::new("https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?".to_string())
-            .append_pair("bl", "boq_assistant-bard-web-server_boq_assistant-bard-web-server_20240201.08_p9")
+            .append_pair("bl", "boq_assistant-bard-web-server_20240201.08_p9")
             .append_pair("_reqid", &self.reqid.to_string())
             .append_pair("rt", "c")
             .append_pair("hl", "en")
