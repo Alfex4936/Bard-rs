@@ -130,8 +130,8 @@ impl Chatbot {
 
         let client = client_builder.build()?;
 
-        // 1. GET request to https://bard.google.com/
-        let resp = client.get("https://bard.google.com/").send().await?;
+        // 1. GET request to https://gemini.google.com/
+        let resp = client.get("https://gemini.google.com/").send().await?;
         let body = resp.text().await?;
 
         // 2. Extract SNlM0e value using regex
@@ -194,8 +194,8 @@ impl Chatbot {
             urlencoding::encode(&self.snlm0e)
         );
 
-        let encoded: String = form_urlencoded::Serializer::new("https://bard.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?".to_string())
-            .append_pair("bl", "boq_assistant-bard-web-server_20231214.04_p4")
+        let encoded: String = form_urlencoded::Serializer::new("https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?".to_string())
+            .append_pair("bl", "boq_assistant-bard-web-server_20240201.08_p9")
             .append_pair("_reqid", &self.reqid.to_string())
             .append_pair("rt", "c")
             .append_pair("hl", "en")
@@ -208,11 +208,11 @@ impl Chatbot {
         );
         headers.insert(
             "Origin",
-            HeaderValue::from_static("https://bard.google.com"),
+            HeaderValue::from_static("https://gemini.google.com"),
         );
         headers.insert(
             "Referer",
-            HeaderValue::from_static("https://bard.google.com/"),
+            HeaderValue::from_static("https://gemini.google.com/"),
         );
 
         progress_bar.set_position(rand::thread_rng().gen_range(20..40));
