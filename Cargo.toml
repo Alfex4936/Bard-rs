@@ -1,12 +1,12 @@
 [package]
 name = "bard-rs"
-version = "1.2.5"
+version = "1.2.6"
 edition = "2021"
 authors = ["Seok Won Choi <ikr@kakao.com>"]
-description = "Google Bard CLI"
+description = "Google Gemini CLI (Bard)"
 license = "MIT"
 repository = "https://github.com/Alfex4936/Bard-rs"
-keywords = ["Google", "Bard", "CLI"]
+keywords = ["Google", "Bard", "Gemini", "Chatbot", "CLI"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

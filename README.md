@@ -1,12 +1,12 @@
-# <img src="https://user-images.githubusercontent.com/2356749/235068474-5daddf05-54d6-4391-ae97-1a944aebdec6.png" style="height: 32px"> Google Bard CLI
+# <img src="https://user-images.githubusercontent.com/2356749/235068474-5daddf05-54d6-4391-ae97-1a944aebdec6.png" style="height: 32px"> Google Gemini CLI
 
-A simple command line interface for interacting with Google Bard, written in Rust.
+A simple command line interface for interacting with Google Gemini (Previously `Bard`), written in Rust.
 
 This CLI allows you to save chat history as a Markdown file at a specified absolute or relative path in realtime
 
 and handles graceful exit with Ctrl+C.
 
-![image](https://github.com/Alfex4936/Bard-rs/assets/2356749/76b487a4-e1de-4145-9ce4-753cbbcce812)
+![image](https://github.com/Alfex4936/Bard-rs/assets/2356749/168fbea0-fb85-4cc3-ae16-c6936b17b2c1)
 
 ---
 
@@ -48,22 +48,24 @@ The executable binary file will be located in the `target/release` folder.
 
 ## Usage
 
-Before using the Google Bard CLI, you need to obtain your session cookie. To get the session cookie, follow these steps:
+Before using the Google Gemini CLI, you need to obtain your session cookie. To get the session cookie, follow these steps:
 
-1. Go to [Google Bard](https://bard.google.com/) in Chrome.
+1. Go to [Google Gemini](https://gemini.google.com/) in Chrome.
 2. Open Chrome Developer Tools (F12 or `Ctrl + Shift + I`).
 3. Go to the "Application" tab.
-4. Under "Storage" > "Cookies", click on "https://bard.google.com".
-5. Find the cookies with the name `__Secure-1PSID` and `__Secure-1PSIDTS`, and copy the values. (it includes "." usually for 1PSID)
+4. Under "Storage" > "Cookies", click on "https://gemini.google.com".
+5. Find the cookies with the name `__Secure-1PSID` (Must) and `__Secure-1PSIDTS` (Optional), and copy the values.
 
-Now you can use the Google Bard CLI:
+Now you can use the Google Gemini CLI:
 
-> Supported options: `-s` (__Secure-1PSID cookie), `-t` (__Secure-1PSIDTS cookie), `-m` (if present, it'll print other Bard's responses for your prompt), `-p` (if present with path, it'll save your chat history as markdown.), `-e` (if present with .env file location, it'll use that session cookie)
+> Supported options: `-s` (__Secure-1PSID cookie), `-t` (__Secure-1PSIDTS cookie), `-m` (if present, it'll print other Gemini's responses for your prompt), `-p` (if present with path, it'll save your chat history as markdown.), `-e` (if present with .env file location, it'll use that session cookie)
 
-It'll save as your first prompt message. (eg: "Hey yo" -> bard_hey_yo.md)
+It'll save as your first prompt message. (eg: "Hey yo" -> gemini_hey_yo.md)
 
 ```
 bard-rs --psid <your_psid> --psidts <your_psidts> --path ./
+
+bard-rs --psid <your_psid> --path ./
 ```
 
 Replace `<your_psid>` and `<your_psidts>` with the value you copied from the Developer Tools.
@@ -71,7 +73,7 @@ Replace `<your_psid>` and `<your_psidts>` with the value you copied from the Dev
 If you don't want to save the chat history as a Markdown file, skip `--path`:
 
 ```
-bard-rs --psid <your_psid> --psidts <your_psidts>
+bard-rs -p <your_psid>
 ```
 
 If you don't want to pass that long session in terminal, use `.env` file (refer to `.env_sample`)
@@ -90,7 +92,7 @@ bard-rs
 
 above command is same as `bard-rs -e .env`
 
-`.env` file must contain `PSID` and `PSIDTS` key. (they are both derived from `__Secure-1PSID` and `__Secure-1PSIDTS`)
+`.env` file must contain `PSID` key. (it is derived from `__Secure-1PSID`)
 
 > ![IMPORTANT]
 > Need `__Secure-1PSID` and `__Secure-1PSIDTS`
@@ -98,15 +100,23 @@ above command is same as `bard-rs -e .env`
 > ! using `echo PSID=... > .env` might cause encoding problem that `dotenv` cannot read and end up causing no session key error.
 
 ```
-SESSION_ID=~.
+PSID=~.
 ```
+
+## Resolving "SNlM0e not found" Error
+> [!IMPORTANT]
+> if you are getting "SNlM0e not found. Check your cookies." even with `__Secure-1PSIDTS`
+
+1. Clear your cookies. (In Chrome, DevTools - Application - Cookies)
+2. Login again.
+3. Obtain new `__Secure-1PSID` (Seems like typically contains a numerical identifier representing the logged-in user.)
 
 ## Commands
 
-- Type your message and press Enter to send it to Google Bard.
+- Type your message and press Enter to send it to Google Gemini.
 - Type `!reset` to reset the conversation.
 - Type `!exit` to exit the CLI.
-- Type `!show` to see other Bard's answers for your last message.
+- Type `!show` to see other Gemini's answers for your last message.
 
 ## License
 

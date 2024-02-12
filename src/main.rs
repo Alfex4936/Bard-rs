@@ -5,6 +5,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use chrono::Local;
 use clap::Parser;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
@@ -20,7 +21,7 @@ use rustyline::error::ReadlineError;
 use rustyline::highlight::{Highlighter, MatchingBracketHighlighter};
 use rustyline::hint::HistoryHinter;
 use rustyline::{Completer, Helper, Hinter, Validator};
-use rustyline::{CompletionType, Config, EditMode, Editor};
+use rustyline::{CompletionType, Config, Editor};
 
 // const LOADING_CHARS: &str = "/-\\|/-\\|";
 
@@ -60,17 +61,13 @@ impl Highlighter for MyHelper {
     }
 }
 
-/// Google Bard CLI
+/// Google Gemini CLI
 #[derive(Parser, Debug)]
-#[command(author = "Seok Won Choi", version, about = "Google Bard CLI in Rust", long_about = None)]
+#[command(author = "Seok Won Choi", version, about = "Google Gemini CLI in Rust", long_about = None)]
 // #[clap(arg_required_else_help(true))]
 struct Args {
     /// __Secure-1PSID
-    #[arg(
-        short = 's',
-        long,
-        help = "__Secure-1PSID, about 71 length long, including '.' in the end."
-    )]
+    #[arg(short = 's', long, help = "__Secure-1PSID, usually starts with g.")]
     psid: Option<String>,
 
     /// __Secure-1PSIDTS
@@ -115,13 +112,13 @@ struct Chatbot {
 
 impl Chatbot {
     pub async fn new(_1psid: &str, _1psidts: &str) -> Result<Self, Box<dyn Error>> {
-        let cookie = format!("__Secure-1PSID={_1psid},__Secure-1PSIDTS={_1psidts}");
+        let cookie = format!("__Secure-1PSID={_1psid}; __Secure-1PSIDTS={_1psidts}");
 
         let mut headers = HeaderMap::new();
-        headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"));
+        headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"));
         headers.insert(COOKIE, HeaderValue::from_str(&cookie)?);
 
-        let client_builder = match env::var("BARD_PROXY_SERVER") {
+        let client_builder = match env::var("GEMINI_PROXY_SERVER") {
             Ok(proxy_server) if !proxy_server.is_empty() => reqwest::Client::builder()
                 .default_headers(headers)
                 .proxy(reqwest::Proxy::all(&proxy_server)?),
@@ -134,13 +131,15 @@ impl Chatbot {
         let resp = client.get("https://gemini.google.com/").send().await?;
         let body = resp.text().await?;
 
+        // println!("{:#?}", body);
+
         // 2. Extract SNlM0e value using regex
         let re = Regex::new(r#"SNlM0e":"(.*?)""#).unwrap();
         // println!("Extracting SNlM0e {:#?}", re);
         let snlm0e = re
             .captures(&body)
             .and_then(|caps| caps.get(1).map(|m| m.as_str()))
-            .expect("SNlM0e not found");
+            .expect("SNlM0e not found. Check your cookies.");
 
         let reqid: u64 = rand::thread_rng().gen_range(100000..999999);
 
@@ -198,7 +197,7 @@ impl Chatbot {
             .append_pair("bl", "boq_assistant-bard-web-server_20240201.08_p9")
             .append_pair("_reqid", &self.reqid.to_string())
             .append_pair("rt", "c")
-            .append_pair("hl", "en")
+            // .append_pair("hl", "en")
             .finish();
 
         let mut headers = HeaderMap::new();
@@ -245,6 +244,8 @@ impl Chatbot {
             if let Value::String(chat_data_str) = chat_data {
                 let json_chat_data: Vec<Value> = serde_json::from_str(chat_data_str)?;
 
+                // println!("{:#?}", json_chat_data);
+
                 results.insert("content".to_string(), json_chat_data[4][0][1][0].clone());
                 results.insert("conversation_id".to_string(), json_chat_data[1][0].clone());
                 results.insert("response_id".to_string(), json_chat_data[1][1].clone());
@@ -280,12 +281,39 @@ impl Chatbot {
 
                 let conversation_id = results.get("conversation_id").and_then(Value::as_str);
                 let response_id = results.get("response_id").and_then(Value::as_str);
-                let choice_id = results
+                let mut choice_id = results
                     .get("choices")
                     .and_then(Value::as_array)
                     .and_then(|choices| choices.get(0))
                     .and_then(|choice| choice.get("id"))
-                    .and_then(Value::as_str);
+                    .and_then(Value::as_str)
+                    .map(|s| s.to_string());
+
+                // sometimes, there is only one choice.
+                // If not found, search for an element that starts with "rc_"
+                if choice_id.is_none() {
+                    'outer: for item in json_chat_data.iter() {
+                        if let Some(array) = item.as_array() {
+                            for sub_item in array.iter() {
+                                if let Some(s) = sub_item.as_str() {
+                                    if s.starts_with("rc_") {
+                                        choice_id = Some(s.to_string());
+                                        break 'outer;
+                                    }
+                                } else if let Some(array) = sub_item.as_array() {
+                                    for inner_item in array.iter() {
+                                        if let Some(s) = inner_item.as_str() {
+                                            if s.starts_with("rc_") {
+                                                choice_id = Some(s.to_string());
+                                                break 'outer;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 if let (Some(conversation_id), Some(response_id), Some(choice_id)) =
                     (conversation_id, response_id, choice_id)
@@ -341,7 +369,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     if !args.proxy.is_empty() {
-        env::set_var("BARD_PROXY_SERVER", args.proxy.as_str());
+        env::set_var("GEMINI_PROXY_SERVER", args.proxy.as_str());
     }
 
     let _1psid = args
@@ -384,7 +412,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 None
             }
         })
-        .expect("No session ID provided. Either pass it with -s or provide a .env file");
+        .unwrap_or_else(|| "".to_string()); // Use an empty string if no value is found
+                                            // .expect("No session ID provided. Either pass it with -s or provide a .env file");
 
     let mut chatbot = Chatbot::new(&_1psid, &_1psidts).await?;
 
@@ -394,7 +423,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config = Config::builder()
         .history_ignore_space(true)
         .completion_type(CompletionType::List)
-        .edit_mode(EditMode::Vi)
         .build();
 
     let helper = MyHelper {
@@ -408,14 +436,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     rl.set_helper(Some(helper));
 
     let user_prompt = "╭─ You".bright_green();
-    let bard_prompt = "╭─ Bard".bright_cyan();
+    let gemini_prompt = "╭─ Gemini".bright_cyan();
     let system_prompt = "╭─ System".bright_red();
     let under_arrow = "╰─>".bright_cyan();
     let under_arrow_red = "╰─>".bright_red();
     let under_arrow_green = "╰─> ";
     let mut last_response: Option<HashMap<String, Value>> = None;
-
-    use chrono::Local;
 
     println!("");
     loop {
@@ -440,9 +466,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .replace(' ', "_");
 
                     let file_name = if file_name.is_empty() {
-                        "bard.md".to_string()
+                        "gemini.md".to_string()
                     } else {
-                        format!("bard_{}.md", file_name)
+                        format!("gemini_{}.md", file_name)
                     };
 
                     first_input = false;
@@ -500,7 +526,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     if let Some(ref res) = last_response {
                         let current_time = Local::now().format("%H:%M:%S").to_string();
 
-                        println!("\n{bard_prompt} [{current_time}]");
+                        println!("\n{gemini_prompt} [{current_time}]");
                         let array = res.get("choices").unwrap().as_array().unwrap();
 
                         for (i, object) in array.iter().enumerate() {
@@ -514,7 +540,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         append_to_file(file_path, &format!("**You**: {}\n\n", input)).await?;
                     }
                     let current_time = Local::now().format("%H:%M:%S").to_string();
-                    println!("\n{bard_prompt} [{current_time}]");
+                    println!("\n{gemini_prompt} [{current_time}]");
 
                     let response = chatbot.ask(input, loading_chars).await?;
                     // print!("{} thinking...", under_arrow);
@@ -542,7 +568,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
 
                     if let Some(file_path) = &file_path {
-                        append_to_file(file_path, &format!("**Bard**: {}\n\n", response_content))
+                        append_to_file(file_path, &format!("**Gemini**: {}\n\n", response_content))
                             .await?;
                     }
 
