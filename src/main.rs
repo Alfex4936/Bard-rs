@@ -1,4 +1,5 @@
-use std::borrow::Cow::{self, Borrowed, Owned};
+use futures_util::io::AsyncWriteExt;
+
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
@@ -13,53 +14,11 @@ use rand::Rng;
 use regex::Regex;
 use reqwest::header::{HeaderMap, HeaderValue, COOKIE, USER_AGENT};
 use serde_json::{json, Value};
-use tokio::io::AsyncWriteExt;
 use url::form_urlencoded;
 
-use rustyline::completion::FilenameCompleter;
-use rustyline::error::ReadlineError;
-use rustyline::highlight::{Highlighter, MatchingBracketHighlighter};
-use rustyline::hint::HistoryHinter;
-use rustyline::{Completer, Helper, Hinter, Validator};
-use rustyline::{CompletionType, Config, Editor};
+use rustyline_async::{Readline, ReadlineEvent, SharedWriter};
 
 // const LOADING_CHARS: &str = "/-\\|/-\\|";
-
-#[derive(Helper, Completer, Hinter, Validator)]
-struct MyHelper {
-    #[rustyline(Completer)]
-    completer: FilenameCompleter,
-    highlighter: MatchingBracketHighlighter,
-    #[rustyline(Hinter)]
-    hinter: HistoryHinter,
-    colored_prompt: String,
-}
-
-impl Highlighter for MyHelper {
-    fn highlight_prompt<'b, 's: 'b, 'p: 'b>(
-        &'s self,
-        prompt: &'p str,
-        default: bool,
-    ) -> Cow<'b, str> {
-        if default {
-            Borrowed(&self.colored_prompt)
-        } else {
-            Borrowed(prompt)
-        }
-    }
-
-    fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
-        Owned("\x1b[1m".to_owned() + hint + "\x1b[m")
-    }
-
-    fn highlight<'l>(&self, line: &'l str, pos: usize) -> Cow<'l, str> {
-        self.highlighter.highlight(line, pos)
-    }
-
-    fn highlight_char(&self, line: &str, pos: usize, _forced: bool) -> bool {
-        self.highlighter.highlight_char(line, pos, false)
-    }
-}
 
 /// Google Gemini CLI
 #[derive(Parser, Debug)]
@@ -113,9 +72,10 @@ struct Chatbot {
 impl Chatbot {
     pub async fn new(_1psid: &str, _1psidts: &str) -> Result<Self, Box<dyn Error>> {
         let cookie = format!("__Secure-1PSID={_1psid}; __Secure-1PSIDTS={_1psidts}");
+        // println!("{}", cookie);
 
         let mut headers = HeaderMap::new();
-        headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"));
+        headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"));
         headers.insert(COOKIE, HeaderValue::from_str(&cookie)?);
 
         let client_builder = match env::var("GEMINI_PROXY_SERVER") {
@@ -132,6 +92,13 @@ impl Chatbot {
         let body = resp.text().await?;
 
         // println!("{:#?}", body);
+
+        // 2. Check if the body contains the word "CAPTCHA"
+        if body.contains("CAPTCHA") {
+            panic!(
+                "ERROR: Google detected it as a malicious action. The block will expire shortly after those requests stop. Try again later."
+            );
+        }
 
         // 2. Extract SNlM0e value using regex
         let re = Regex::new(r#"SNlM0e":"(.*?)""#).unwrap();
@@ -157,6 +124,7 @@ impl Chatbot {
         &mut self,
         message: &str,
         loading_chars: &str,
+        writer: &mut SharedWriter,
     ) -> Result<HashMap<String, Value>, Box<dyn Error>> {
         let progress_bar = ProgressBar::new(100);
         // let tick_chars = "⠁⠂⠄⡀⢀⠠⠐⠈ ";
@@ -165,6 +133,7 @@ impl Chatbot {
         // let tick_chars = "-\\|/-\\|/";
         // let tick_chars = "◐◐◓◓◑◑◒◒";
         // let tick_chars = "/-\\|/-\\|";
+        writer.write_all(b"\r\x1b[2K").await?; // Clear the line after the progress bar
 
         progress_bar.set_style(
             ProgressStyle::with_template(
@@ -194,7 +163,7 @@ impl Chatbot {
         );
 
         let encoded: String = form_urlencoded::Serializer::new("https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?".to_string())
-            .append_pair("bl", "boq_assistant-bard-web-server_20240201.08_p9")
+            .append_pair("bl", "boq_assistant-bard-web-server_20240717.08_p5")
             .append_pair("_reqid", &self.reqid.to_string())
             .append_pair("rt", "c")
             // .append_pair("hl", "en")
@@ -353,8 +322,33 @@ async fn append_to_file(file_path: &PathBuf, content: &str) -> Result<(), Box<dy
         .open(file_path)
         .await?;
 
-    file.write_all(content.as_bytes()).await?;
+    tokio::io::AsyncWriteExt::write_all(&mut file, content.as_bytes()).await?;
     Ok(())
+}
+
+// Function to encapsulate the repeated logic
+fn get_env_var_or_dotenv(var_name: &str) -> Option<String> {
+    env::var(var_name)
+        .ok()
+        .or_else(|| {
+            dotenv::dotenv().ok();
+            env::var(var_name).ok()
+        })
+        .or_else(|| {
+            if let Ok(mut bin_path) = env::current_exe() {
+                bin_path.pop(); // Remove the binary name from the path
+                bin_path.push(".env"); // Add .env to the path
+                dotenv::from_path(bin_path).ok();
+                env::var(var_name).ok()
+            } else {
+                None
+            }
+        })
+}
+
+fn strip_ansi_codes(s: &str) -> String {
+    let re = regex::Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+    re.replace_all(s, "").to_string()
 }
 
 #[tokio::main]
@@ -372,89 +366,46 @@ async fn main() -> Result<(), Box<dyn Error>> {
         env::set_var("GEMINI_PROXY_SERVER", args.proxy.as_str());
     }
 
-    let _1psid = args
-        .psid
-        .or_else(|| env::var("PSID").ok())
-        .or_else(|| {
-            // Try loading .env from the current directory
-            dotenv::dotenv().ok();
-            env::var("PSID").ok()
-        })
-        .or_else(|| {
-            // Try loading .env from the binary's directory
-            if let Ok(mut bin_path) = env::current_exe() {
-                bin_path.pop(); // Remove the binary name from the path
-                bin_path.push(".env"); // Add .env to the path
-                dotenv::from_path(bin_path).ok();
-                env::var("PSID").ok()
-            } else {
-                None
-            }
-        })
+    let _1psid = get_env_var_or_dotenv("PSID")
         .expect("No session ID provided. Either pass it with -s or provide a .env file");
 
-    let _1psidts = args
-        .psidts
-        .or_else(|| env::var("PSIDTS").ok())
-        .or_else(|| {
-            // Try loading .env from the current directory
-            dotenv::dotenv().ok();
-            env::var("PSIDTS").ok()
-        })
-        .or_else(|| {
-            // Try loading .env from the binary's directory
-            if let Ok(mut bin_path) = env::current_exe() {
-                bin_path.pop(); // Remove the binary name from the path
-                bin_path.push(".env"); // Add .env to the path
-                dotenv::from_path(bin_path).ok();
-                env::var("PSIDTS").ok()
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| "".to_string()); // Use an empty string if no value is found
-                                            // .expect("No session ID provided. Either pass it with -s or provide a .env file");
+    let _1psidts = get_env_var_or_dotenv("PSIDTS").unwrap_or_else(|| "".to_string());
+
+    // Attempt to get the path from command-line arguments or environment variable
+    let history_path = if !args.path.trim().is_empty() {
+        args.path.clone()
+    } else {
+        get_env_var_or_dotenv("GEMINI_HISTORY").unwrap_or_else(|| "".to_string())
+    };
 
     let mut chatbot = Chatbot::new(&_1psid, &_1psidts).await?;
 
     let mut first_input = true;
     let mut file_path = None;
 
-    let config = Config::builder()
-        .history_ignore_space(true)
-        .completion_type(CompletionType::List)
-        .build();
+    let user_prompt = "╭─ You".bright_green().to_string();
+    let gemini_prompt = "╭─ Gemini".bright_cyan().to_string();
+    let system_prompt = "╭─ System".bright_red().to_string();
+    let under_arrow = "╰─>".bright_cyan().to_string();
+    let under_arrow_red = "╰─>".bright_red().to_string();
+    let under_arrow_green = ">-"; // TODO: won't color it as it harms cursor position
 
-    let helper = MyHelper {
-        completer: FilenameCompleter::new(),
-        highlighter: MatchingBracketHighlighter::new(),
-        hinter: HistoryHinter {},
-        colored_prompt: "".to_owned(),
-    };
-
-    let mut rl = Editor::with_config(config)?;
-    rl.set_helper(Some(helper));
-
-    let user_prompt = "╭─ You".bright_green();
-    let gemini_prompt = "╭─ Gemini".bright_cyan();
-    let system_prompt = "╭─ System".bright_red();
-    let under_arrow = "╰─>".bright_cyan();
-    let under_arrow_red = "╰─>".bright_red();
-    let under_arrow_green = "╰─> ";
     let mut last_response: Option<HashMap<String, Value>> = None;
+    let (mut readline, mut writer) = Readline::new(format!("{under_arrow_green} "))?;
+    // the input line does not remain on screen after Enter
+    readline.should_print_line_on(true, true);
 
-    println!("");
+    writer.write_all(b"\n").await?;
     loop {
         let current_time = Local::now().format("%H:%M:%S").to_string();
-        println!("{user_prompt} [{t}]", t = current_time);
-        rl.helper_mut().expect("No helper").colored_prompt =
-            format!("\x1b[1;32m{p} \x1b[0m", p = under_arrow_green);
-        let readline = rl.readline(under_arrow_green);
+        writer
+            .write_all(format!("{user_prompt} [{t}]\n", t = current_time).as_bytes())
+            .await?;
 
-        match readline {
-            Ok(line) => {
-                let input = line.trim();
-                rl.add_history_entry(input)?;
+        match readline.readline().await {
+            Ok(ReadlineEvent::Line(line)) => {
+                let input = line.trim().to_string();
+                readline.add_history_entry(input.clone());
 
                 if first_input {
                     let file_name = input
@@ -472,9 +423,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     };
 
                     first_input = false;
-                    file_path = if !args.path.trim().is_empty() {
-                        let mut path = PathBuf::from(&args.path);
-                        if !args.path.ends_with('/') {
+                    file_path = if !history_path.trim().is_empty() {
+                        let mut path = PathBuf::from(&history_path);
+                        if !history_path.ends_with('/') {
                             path.push("/");
                         }
                         Some(path.join(&file_name))
@@ -488,8 +439,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 } else if input == "!reset" {
                     chatbot.reset();
                 } else if input == "!settings" {
-                    println!("\n{}", system_prompt);
-                    println!("{under_arrow_red} Please select a progress bar style: ");
+                    writer
+                        .write_all(format!("\n{system_prompt}\n").as_bytes())
+                        .await?;
+                    writer
+                        .write_all(
+                            format!("{under_arrow_red} Please select a progress bar style: \n")
+                                .as_bytes(),
+                        )
+                        .await?;
 
                     let tick_chars = vec![
                         "⠁⠂⠄⡀⢀⠠⠐⠈",
@@ -500,38 +458,50 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         "/-\\|/-\\|",
                     ];
 
-                    // Display the tick characters
                     for (i, chars) in tick_chars.iter().enumerate() {
-                        println!("{}. {}", i + 1, chars);
+                        writer
+                            .write_all(format!("{}. {}\n", i + 1, chars).as_bytes())
+                            .await?;
                     }
 
-                    let mut style_choice = String::new();
-                    std::io::stdin()
-                        .read_line(&mut style_choice)
-                        .expect("Failed to read line");
-                    let style_choice: usize = style_choice
-                        .trim()
-                        .parse()
-                        .expect("Please input a valid number");
+                    let style_choice = match readline.readline().await? {
+                        ReadlineEvent::Line(line) => line,
+                        _ => {
+                            writer
+                                .write_all(b"Invalid input. Exiting settings.\n")
+                                .await?;
+                            continue;
+                        }
+                    };
+
+                    let style_choice: usize = style_choice.trim().parse().unwrap_or(0);
 
                     if style_choice > tick_chars.len() || style_choice < 1 {
-                        println!("Invalid selection.");
+                        writer.write_all(b"Invalid selection.\n").await?;
                     } else {
                         let selected_style = &tick_chars[style_choice - 1];
-                        // ... apply this style to your actual progress bar
-                        println!("Selected style: {}", selected_style);
+                        writer
+                            .write_all(format!("Selected style: {}\n", selected_style).as_bytes())
+                            .await?;
                         loading_chars = selected_style;
                     }
                 } else if input == "!show" {
                     if let Some(ref res) = last_response {
                         let current_time = Local::now().format("%H:%M:%S").to_string();
 
-                        println!("\n{gemini_prompt} [{current_time}]");
+                        writer
+                            .write_all(format!("\n\n{gemini_prompt} [{current_time}]\n").as_bytes())
+                            .await?;
                         let array = res.get("choices").unwrap().as_array().unwrap();
 
                         for (i, object) in array.iter().enumerate() {
                             if let Some(content) = object["content"].as_str() {
-                                println!("\r{} {}. {}\n", under_arrow, i + 1, content);
+                                writer
+                                    .write_all(
+                                        format!("{} {}. {}\n", under_arrow, i + 1, content)
+                                            .as_bytes(),
+                                    )
+                                    .await?;
                             }
                         }
                     }
@@ -540,15 +510,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         append_to_file(file_path, &format!("**You**: {}\n\n", input)).await?;
                     }
                     let current_time = Local::now().format("%H:%M:%S").to_string();
-                    println!("\n{gemini_prompt} [{current_time}]");
 
-                    let response = chatbot.ask(input, loading_chars).await?;
-                    // print!("{} thinking...", under_arrow);
-                    // stdout().flush().unwrap(); // Flush the output
+                    readline.flush()?;
+                    writer.write_all(b"\r").await?; // Clear the line before the progress bar
 
-                    print!("\r");
+                    let response = chatbot.ask(&input, loading_chars, &mut writer).await?;
 
                     let response_content = response.get("content").unwrap().as_str().unwrap();
+
+                    writer
+                        .write_all(format!("\n\n{gemini_prompt} [{current_time}]\n").as_bytes())
+                        .await?;
 
                     if args.multi {
                         let array = response.get("choices").unwrap().as_array().unwrap();
@@ -557,14 +529,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             if let Some(content_array) = object["content"].as_array() {
                                 for string in content_array {
                                     if let Some(s) = string.as_str() {
-                                        println!("\r{} {}. {}\n", under_arrow, i + 1, s);
+                                        writer
+                                            .write_all(
+                                                format!("{} {}. {}\n", under_arrow, i + 1, s)
+                                                    .as_bytes(),
+                                            )
+                                            .await?;
                                     }
                                 }
                             }
                         }
                     } else {
-                        // Use \r to move the cursor to the beginning of the line and print the response
-                        println!("\r{} {}\n", under_arrow, response_content); // Print the second line
+                        writer
+                            .write_all(format!("{} {}\n", under_arrow, response_content).as_bytes())
+                            .await?;
                     }
 
                     if let Some(file_path) = &file_path {
@@ -575,8 +553,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     last_response = Some(response);
                 }
             }
-            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
-                println!("\nInterrupt signal detected, exiting...");
+            Ok(ReadlineEvent::Eof) => {
+                writer.write_all(b"\nEOF detected, exiting...\n").await?;
+                break;
+            }
+            Ok(ReadlineEvent::Interrupted) => {
+                writer
+                    .write_all(b"\nInterrupt signal detected, exiting...\n")
+                    .await?;
                 break;
             }
             Err(_) => {
@@ -585,5 +569,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    readline.flush()?;
     Ok(())
 }

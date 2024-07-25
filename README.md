@@ -84,7 +84,7 @@ bard-rs -e .env -p ./
 
 If you prefer not to specify a path, `bard-rs` will automatically search for the .env file in the following locations: the argument-provided path, the current working directory, and the directory of the bard-rs binary.
 
-(`-p` is still required if you want to save the chat history as markdown file.)
+(`GEMINI_HISTORY` is required in `.env` if you want to save the chat history as markdown file everytime.)
 
 ```
 bard-rs
