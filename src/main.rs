@@ -516,7 +516,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                     let response = chatbot.ask(&input, loading_chars, &mut writer).await?;
 
-                    let response_content = response.get("content").unwrap().as_str().unwrap();
+                    let response_content = response.get("content").and_then(|v| v.as_str()).ok_or_else(|| "Failed to extract response content from Gemini".into())?;
 
                     writer
                         .write_all(format!("\n\n{gemini_prompt} [{current_time}]\n").as_bytes())
